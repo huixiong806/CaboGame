@@ -62,7 +62,7 @@ src/
     render.rs      askama 模板与 SSE fragment 组装
     routes.rs      HTTP 路由（创建/加入/命令/SSE/静态资源）
 templates/         全部界面为服务端渲染的 HTML 模板
-static/            手写 CSS + vendored htmx（唯一第三方脚本）
+static/            手写 CSS + vendored htmx 1.9.12 与官方 SSE 扩展（第三方脚本）
 ```
 
 ### 记忆模式
@@ -101,7 +101,18 @@ reg.register(Arc::new(AggressiveBot));
 ## 测试
 
 ```bash
-cargo test                          # 15 个规则集成测试
+cargo test                          # 19 个规则集成测试
 cargo run --release --bin cabo-sim -- --games 1000 --players 4 --seed 1
 # 无头模拟 1000 局 Bot 对战，输出胜率/轮数统计，用于回归与调参
 ```
+
+## 版权声明与第三方依赖
+
+本项目以 [MIT 许可](LICENSE) 发布。
+
+内嵌的 `static/htmx.min.js` 与 `static/ext-sse.js`
+来自 htmx 1.9.12 及其官方 SSE 扩展，以 0BSD 许可分发，见
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+其余 Rust 依赖由 Cargo 从 crates.io
+获取，版本锁定在 `Cargo.lock`。
