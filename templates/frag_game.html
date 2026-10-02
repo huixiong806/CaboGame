@@ -1,0 +1,282 @@
+<div class="game">
+  {% if err != "" %}<div class="err-banner">{{ err }}</div>{% endif %}
+
+  <div class="status-strip">
+    <span class="round">第 {{ v.round_no }} 轮</span>
+    <span>目标 {{ v.target_score }} 分</span>
+    <span>摸牌堆 {{ v.deck_count }}</span>
+    {% if v.cabo_caller.is_some() %}
+    <span class="cabo-strip">📣 {{ v.cabo_text() }} 已宣告 Cabo（还剩 {{ v.extra_left }} 个加时回合）</span>
+    {% endif %}
+    {% if v.memory_mode %}<span class="mem-strip">🧠 记忆模式</span>{% endif %}
+  </div>
+
+  <div class="layout">
+    <section class="table">
+      <div class="opponents">
+        {% for o in v.opponents %}
+        <div class="seat {% if o.is_current %}turn{% endif %} {% if o.is_caller %}caller{% endif %}">
+          <div class="seat-head">
+            <span class="pname">{{ o.name }}</span>
+            {% if o.is_ai %}<span class="tag ai">AI</span>{% endif %}
+            {% if o.is_host %}<span class="tag host">房主</span>{% endif %}
+            {% if o.is_caller %}<span class="tag cabo">CABO</span>{% endif %}
+            <span class="pscore" title="累计得分">{{ o.total_score }}</span>
+          </div>
+          <div class="cards small">
+            {% for c in o.slots %}
+              {% if v.panel_info.other_click_cmd != "" %}
+                <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+                  <input type="hidden" name="cmd" value="{{ v.panel_info.other_click_cmd }}">
+                  <input type="hidden" name="player" value="{{ o.id }}">
+                  <input type="hidden" name="slot" value="{{ c.slot }}">
+                  <button type="submit" class="{{ c.css_class() }} clickable" title="选择这张牌">
+                    {% if c.is_face() %}<span class="rank">{{ c.rank_text() }}</span>{% endif %}
+                  </button>
+                </form>
+              {% else if c.is_face() %}
+                <div class="{{ c.css_class() }}">
+                  <span class="rank">{{ c.rank_text() }}</span>
+                  {% if c.power_text() != "" %}<span class="pw">{{ c.power_text() }}</span>{% endif %}
+                </div>
+              {% else %}
+                <div class="card back">
+                  {% if c.knows_badge() %}<span class="eye" title="{{ c.knower_count }} 人知道这张牌">👁{{ c.knower_count }}</span>{% endif %}
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="center-row">
+        <div class="piles">
+          <div class="pile">
+            {% if v.panel_info.is_idle && v.panel_info.can_draw %}
+            <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+              <input type="hidden" name="cmd" value="draw">
+              <button type="submit" class="card back deck clickable" title="摸一张牌（弃置或发动能力）">{{ v.deck_count }}</button>
+            </form>
+            {% else %}
+            <div class="card back deck">{{ v.deck_count }}</div>
+            {% endif %}
+            <div class="pile-label">摸牌堆</div>
+          </div>
+          <div class="pile">
+            {% if v.panel_info.is_idle && v.panel_info.can_swap_discard %}
+            <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+              <input type="hidden" name="cmd" value="begin_swap">
+              <input type="hidden" name="source" value="discard">
+              <button type="submit" class="{{ v.discard_css() }} clickable" title="拿这张牌与 1~N 张手牌交换">
+                <span class="rank">{{ v.discard_top_text() }}</span>
+                {% if v.discard_power_text() != "" %}<span class="pw">{{ v.discard_power_text() }}</span>{% endif %}
+              </button>
+            </form>
+            {% else %}
+            <div class="{{ v.discard_css() }}">
+              <span class="rank">{{ v.discard_top_text() }}</span>
+              {% if v.discard_power_text() != "" %}<span class="pw">{{ v.discard_power_text() }}</span>{% endif %}
+            </div>
+            {% endif %}
+            <div class="pile-label">弃牌堆</div>
+          </div>
+        </div>
+
+        {% if v.panel_info.is_drew || (v.panel_info.is_swap_sel && v.panel_info.swap_source_draw) %}
+        <div class="drawn-box">
+          <span class="drawn-hint">{% if v.panel_info.is_drew %}你抽到了{% else %}你从摸牌堆获得了{% endif %}</span>
+          <div class="{{ v.drawn_css() }} big">
+            <span class="rank">{{ v.drawn_text() }}</span>
+            {% if v.drawn_power_text() != "" %}<span class="pw">{{ v.drawn_power_text() }}</span>{% endif %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if v.is_spectator() %}
+      <div class="me-seat spect">👁 你在观战</div>
+      {% else %}
+      <div class="seat me {% if v.me_seat.as_ref().unwrap().is_current %}turn{% endif %} {% if v.me_seat.as_ref().unwrap().is_caller %}caller{% endif %}">
+        <div class="seat-head">
+          <span class="pname">{{ v.me_name }}（你）</span>
+          {% if v.is_host %}<span class="tag host">房主</span>{% endif %}
+          {% if v.me_seat.as_ref().unwrap().is_caller %}<span class="tag cabo">CABO</span>{% endif %}
+          <span class="pscore" title="累计得分">{{ v.me_seat.as_ref().unwrap().total_score }}</span>
+        </div>
+        <div class="cards big-cards {% if v.my_slot_count() > 6 %}many{% endif %}">
+          {% for c in v.me_seat.as_ref().unwrap().slots %}
+            {% if v.panel_info.own_click_cmd != "" %}
+              <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+                <input type="hidden" name="cmd" value="{{ v.panel_info.own_click_cmd }}">
+                <input type="hidden" name="slot" value="{{ c.slot }}">
+                <button type="submit" class="{{ c.css_class() }} big clickable {% if c.selected %}selected{% endif %}" {% if !c.i_know %}title="点数未知"{% endif %}>
+                  {% if c.is_face() %}<span class="rank">{{ c.rank_text() }}</span>{% else %}<span class="rank">?</span>{% endif %}
+                  {% if c.power_text() != "" %}<span class="pw">{{ c.power_text() }}</span>{% endif %}
+                  {% if c.knows_badge() %}<span class="eye" title="{{ c.knower_count }} 人知道这张牌">👁{{ c.knower_count }}</span>{% endif %}
+                </button>
+              </form>
+            {% else %}
+              <div class="{{ c.css_class() }} big">
+                {% if c.is_face() %}<span class="rank">{{ c.rank_text() }}</span>{% else %}<span class="rank">?</span>{% endif %}
+                {% if c.power_text() != "" %}<span class="pw">{{ c.power_text() }}</span>{% endif %}
+                {% if c.knows_badge() %}<span class="eye" title="{{ c.knower_count }} 人知道这张牌">👁{{ c.knower_count }}</span>{% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </section>
+
+    <aside class="side">
+      <div class="panel">
+        {% if v.peek_flash != "" %}<div class="flash">👁 {{ v.peek_flash }}</div>{% endif %}
+        {% if v.panel_info.is_peek_pick %}
+          <h3>开局查看</h3>
+          <p>点选你的 2 张牌查看（其他人会看到你查看了哪两个槽位，但看不到点数）。</p>
+          <p class="hint">已选 {{ v.panel_info.staged.len() }} / 2</p>
+        {% else if v.panel_info.is_peek_wait %}
+          <h3>等待中</h3>
+          <p>已确认查看，等待其他玩家完成初始查看…</p>
+        {% else if v.panel_info.is_idle %}
+          <h3>你的回合</h3>
+          <div class="btn-col">
+            {% if v.panel_info.can_draw %}
+            <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+              <input type="hidden" name="cmd" value="draw">
+              <button type="submit" class="btn primary">🂠 摸一张牌（弃置 / 发动能力）</button>
+            </form>
+            {% endif %}
+            {% if v.panel_info.can_swap_discard %}
+            <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+              <input type="hidden" name="cmd" value="begin_swap">
+              <input type="hidden" name="source" value="discard">
+              <button type="submit" class="btn primary">⇄ 拿弃牌堆顶（{{ v.discard_top_text() }}）交换</button>
+            </form>
+            {% endif %}
+            {% if v.panel_info.can_cabo %}
+            <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+              <input type="hidden" name="cmd" value="cabo_arm">
+              <button type="submit" class="btn cabo">📣 宣告 Cabo</button>
+            </form>
+            {% endif %}
+            <p class="hint">交换：选 1 张必成功；选多张需同点数，失败则全部明置且新牌追加入手。</p>
+          </div>
+        {% else if v.panel_info.is_drew %}
+          <h3>你抽到了 {{ v.panel_info.drawn_rank }}</h3>
+          <div class="btn-col">
+            <p class="hint">👉 直接点一张手牌与它交换（必成功）</p>
+            <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+              <input type="hidden" name="cmd" value="discard">
+              <button type="submit" class="btn primary">弃置它</button>
+            </form>
+            {% if v.panel_info.arm_cmd != "" %}
+            <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+              <input type="hidden" name="cmd" value="{{ v.panel_info.arm_cmd }}">
+              <button type="submit" class="btn primary">✨ 发动【{{ v.panel_info.drawn_power }}】再弃置</button>
+            </form>
+            {% endif %}
+            <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+              <input type="hidden" name="cmd" value="draw_swap">
+              <button type="submit" class="btn ghost">⇄ 多张交换模式（赌同点数）</button>
+            </form>
+          </div>
+        {% else if v.panel_info.is_aim_peek %}
+          <h3>偷看</h3>
+          <p>点选自己的一张牌查看。</p>
+          {% include "frag_cancel.html" %}
+        {% else if v.panel_info.is_aim_spy %}
+          <h3>间谍</h3>
+          <p>点选任意对手的一张牌查看。</p>
+          {% include "frag_cancel.html" %}
+        {% else if v.panel_info.is_aim_swap %}
+          <h3>交换</h3>
+          {% if v.panel_info.aim_has_my_slot %}
+          <p>已选自己的槽位 {{ v.panel_info.aim_my_slot }}，再点选对手的一张牌完成盲换。</p>
+          {% else %}
+          <p>先点选自己要换出的一张牌。</p>
+          {% endif %}
+          {% include "frag_cancel.html" %}
+        {% else if v.panel_info.is_swap_sel %}
+          <h3>选择要交换的手牌</h3>
+          {% if v.panel_info.swap_source_draw %}
+          <p>刚摸的牌（见左侧，仅你可见）将与选中的手牌交换。多张需点数相同，失败会全部明置。</p>
+          {% else %}
+          <p>已暂存弃牌堆顶的牌。点选 1~N 张手牌与之交换；多张需点数相同，失败会全部明置且新牌追加入手。</p>
+          {% endif %}
+          <p class="hint">已选 {{ v.panel_info.swap_count }} 张（至少 1 张）</p>
+          <div class="btn-col">
+            {% if v.panel_info.swap_count >= 1 %}
+            <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+              <input type="hidden" name="cmd" value="swap_commit">
+              <button type="submit" class="btn primary">确认交换</button>
+            </form>
+            {% endif %}
+            {% if v.panel_info.swap_can_cancel %}
+            {% include "frag_cancel.html" %}
+            {% endif %}
+          </div>
+        {% else if v.panel_info.is_confirm %}
+          <h3>宣告 Cabo？</h3>
+          <p>其他人将各再行动一次，然后亮牌结算。若你不是严格最低，将额外 +{{ v.cabo_penalty }} 分！</p>
+          <div class="btn-col">
+            <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+              <input type="hidden" name="cmd" value="cabo">
+              <button type="submit" class="btn cabo">📣 确认宣告</button>
+            </form>
+            {% include "frag_cancel.html" %}
+          </div>
+        {% else if v.panel_info.is_round_end %}
+          <h3>本轮结束</h3>
+          <table class="score-table">
+            <tr><th>玩家</th><th>本轮</th><th>累计</th></tr>
+            {% for s in v.all_seats %}
+            <tr>
+              <td>{{ s.name }}{% if s.is_caller %} <span class="tag cabo">CABO</span>{% endif %}{% if s.is_me %} <span class="tag">你</span>{% endif %}</td>
+              <td>+{{ s.round_score_text() }}</td>
+              <td>{{ s.total_score }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+          {% if v.is_host %}
+          <form method="post" action="/room/{{ code }}/host?t={{ token }}">
+            <input type="hidden" name="action" value="next_round">
+            <button type="submit" class="btn primary wide">开始下一轮</button>
+          </form>
+          {% else %}<p class="hint">等待房主开始下一轮…</p>{% endif %}
+        {% else if v.panel_info.is_game_over %}
+          <h3>🏆 游戏结束</h3>
+          <p class="winner-line">{{ v.panel_info.winners|join("、") }} 以最低总分获胜！</p>
+          <table class="score-table">
+            <tr><th>玩家</th><th>累计</th></tr>
+            {% for s in v.all_seats %}
+            <tr><td>{{ s.name }}{% if s.is_me %} <span class="tag">你</span>{% endif %}</td><td>{{ s.total_score }}</td></tr>
+            {% endfor %}
+          </table>
+          {% if v.is_host %}
+          <form method="post" action="/room/{{ code }}/host?t={{ token }}">
+            <input type="hidden" name="action" value="rematch">
+            <button type="submit" class="btn primary wide">再来一局</button>
+          </form>
+          {% else %}<p class="hint">等待房主开新局…</p>{% endif %}
+        {% else if v.panel_info.is_waiting %}
+          <h3>等待</h3>
+          <p>{{ v.panel_info.waiting_text }}</p>
+        {% else %}
+          <h3>CABO</h3>
+          <p>…</p>
+        {% endif %}
+      </div>
+
+      <div class="logbox">
+        <div class="log-title">牌局动态（仅你可见的情报也会显示在这里）</div>
+        <div class="log-lines">
+          {% for e in v.log %}
+          <div class="log-line k-{{ e.kind_str() }}">{{ e.text }}</div>
+          {% endfor %}
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>

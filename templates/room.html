@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %} · 房间 {{ code }}{% endblock %}
+{% block content %}
+<header class="topbar">
+  <a class="brand" href="/">CABO</a>
+  <span class="room-code">房间 <b>{{ code }}</b></span>
+  <form method="post" action="/room/{{ code }}/leave?t={{ token }}">
+    <button type="submit" class="btn ghost small">离开</button>
+  </form>
+</header>
+
+<main class="stage">
+  <div hx-ext="sse" sse-connect="/room/{{ code }}/events?t={{ token }}">
+    <div sse-swap="board" id="board">{{ board|safe }}</div>
+  </div>
+
+  <details class="rules sidebar-rules">
+    <summary>规则速查</summary>
+    {% include "rules_body.html" %}
+  </details>
+</main>
+{% endblock %}

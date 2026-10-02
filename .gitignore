@@ -1,0 +1,63 @@
+# ============================================================
+# CaboGame .gitignore
+# 目标：只提交源码 / 模板 / 静态资源 / 构建配置，
+#      绝不提交编译产物、日志、本地环境与编辑器杂项。
+# ============================================================
+
+# ---------- Rust / Cargo 编译产物 ----------
+# cargo build/dev/test/doc 的全部输出（含 incremental、deps、doc、examples）
+/target/
+**/target/
+# rustfmt / 手工备份
+*.rs.bk
+*.bk
+# 合并冲突残留
+*.orig
+*.rej
+# Windows 下的调试符号（本仓库仅在 target/ 内产生）
+*.pdb
+
+# 注意：Cargo.lock 必须提交（本仓库提供 cabo-server / cabo-sim 二进制），
+#       故此处显式不忽略，用于锁定依赖版本、保证可复现构建。
+
+# ---------- 日志与运行时产物 ----------
+*.log
+/logs/
+server.log
+nohup.out
+
+# ---------- 本地环境 / 密钥 ----------
+.env
+.env.*
+!.env.example
+
+# ---------- 覆盖率与性能分析产物 ----------
+/coverage/
+lcov.info
+*.profraw
+perf.data
+perf.data.old
+flamegraph.svg
+callgrind.out.*
+
+# ---------- 本地打包/发布目录 ----------
+/dist/
+/release/
+
+# ---------- 编辑器与 IDE ----------
+.idea/
+*.iml
+.vscode/
+.fleet/
+*.swp
+*.swo
+*~
+
+# ---------- 操作系统杂项 ----------
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini

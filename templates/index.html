@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %} · 寻找最低分{% endblock %}
+{% block content %}
+<main class="hero">
+  <div class="logo">
+    <div class="logo-cards">
+      <span class="mini-card r-low">0</span>
+      <span class="mini-card r-power">9</span>
+      <span class="mini-card r-high">13</span>
+    </div>
+    <h1>CABO</h1>
+    <p class="sub">简洁与记忆的卡牌博弈 —— 谁的点数最低，谁就赢</p>
+  </div>
+
+  <div class="forms">
+    <form class="cardbox" method="post" action="/create">
+      <h2>创建房间</h2>
+      <label>昵称</label>
+      <input name="name" placeholder="你的昵称" maxlength="12" required autofocus>
+      <button type="submit" class="btn primary">创建并进入</button>
+    </form>
+    <form class="cardbox" method="post" action="/join">
+      <h2>加入房间</h2>
+      <label>房间号</label>
+      <input name="code" class="code-input" placeholder="如 K3F9" maxlength="4" value="{{ join_code }}" required>
+      <label>昵称</label>
+      <input name="name" placeholder="你的昵称" maxlength="12" required>
+      <button type="submit" class="btn primary">加入</button>
+    </form>
+  </div>
+
+  <details class="rules">
+    <summary>怎么玩？</summary>
+    {% include "rules_body.html" %}
+  </details>
+</main>
+{% endblock %}
