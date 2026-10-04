@@ -1,4 +1,4 @@
-<div class="game">
+<div class="game" data-interaction-mode="{{ v.interaction_mode() }}" data-round="{{ v.round_no }}">
   {% if err != "" %}<div class="err-banner">{{ err }}</div>{% endif %}
 
   <div class="status-strip">
@@ -13,9 +13,9 @@
 
   <div class="layout">
     <section class="table">
-      <div class="opponents">
+      <div class="opponents" style="--opponent-count: {{ v.opponents.len() }}">
         {% for o in v.opponents %}
-        <div class="seat {% if o.is_current %}turn{% endif %} {% if o.is_caller %}caller{% endif %}">
+        <div class="seat {% if o.is_current %}turn{% endif %} {% if o.is_caller %}caller{% endif %}" data-effect-key="p{{ o.id }}" data-player-name="{{ o.name }}">
           <div class="seat-head">
             <span class="pname">{{ o.name }}</span>
             {% if o.is_ai %}<span class="tag ai">{{ o.ai_label() }}</span>{% endif %}
@@ -27,13 +27,14 @@
           </div>
           <div class="cards small">
             {% for c in o.slots %}
-              <div class="hand-slot">
+              <div class="hand-slot" data-effect-key="c{{ o.id }}-{{ c.slot }}">
+              <span class="slot-number">{{ c.slot + 1 }}</span>
               {% if v.panel_info.other_click_cmd != "" %}
                 <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
                   <input type="hidden" name="cmd" value="{{ v.panel_info.other_click_cmd }}">
                   <input type="hidden" name="player" value="{{ o.id }}">
                   <input type="hidden" name="slot" value="{{ c.slot }}">
-                  <button type="submit" class="{{ c.css_class() }} clickable" title="选择这张牌">
+                  <button type="submit" class="{{ c.css_class() }} clickable" title="选择这张牌" aria-label="从桌面选择 {{ o.name }} 的第 {{ c.slot + 1 }} 张牌">
                     {% if c.is_face() %}<span class="rank">{{ c.rank_text() }}</span>{% endif %}
                   </button>
                 </form>
@@ -47,7 +48,7 @@
                   {% if c.knows_badge() %}<span class="eye" title="{{ c.knower_count }} 人知道这张牌">👁{{ c.knower_count }}</span>{% endif %}
                 </div>
               {% endif %}
-              <span class="card-visibility {{ c.visibility_class() }}" title="{{ c.visibility_title() }}">{{ c.visibility_label() }}</span>
+              <span class="card-visibility {{ c.visibility_class() }}" data-short-label="{{ c.visibility_short_label() }}" title="{{ c.visibility_title() }}">{{ c.visibility_label() }}</span>
               </div>
             {% endfor %}
           </div>
@@ -57,7 +58,7 @@
 
       <div class="center-row">
         <div class="piles">
-          <div class="pile">
+          <div class="pile" data-effect-key="deck">
             {% if v.panel_info.is_idle && v.panel_info.can_draw %}
             <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
               <input type="hidden" name="cmd" value="draw">
@@ -68,7 +69,7 @@
             {% endif %}
             <div class="pile-label">摸牌堆</div>
           </div>
-          <div class="pile">
+          <div class="pile" data-effect-key="discard">
             {% if v.panel_info.is_idle && v.panel_info.can_swap_discard %}
             <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
               <input type="hidden" name="cmd" value="begin_swap">
@@ -94,7 +95,7 @@
       {% if v.is_spectator() %}
       <div class="me-seat spect">👁 你在观战</div>
       {% else %}
-      <div class="seat me {% if v.me_seat.as_ref().unwrap().is_current %}turn{% endif %} {% if v.me_seat.as_ref().unwrap().is_caller %}caller{% endif %}">
+      <div class="seat me {% if v.me_seat.as_ref().unwrap().is_current %}turn{% endif %} {% if v.me_seat.as_ref().unwrap().is_caller %}caller{% endif %}" data-effect-key="p{{ v.me_seat.as_ref().unwrap().id }}" data-player-name="{{ v.me_name }}">
         <div class="seat-head">
           <span class="pname">{{ v.me_name }}（你）</span>
           {% if v.is_host %}<span class="tag host">房主</span>{% endif %}
@@ -104,21 +105,22 @@
           {% if v.me_seat.as_ref().unwrap().is_high_pairs %}<span class="tag special">高牌双对</span>{% endif %}
         </div>
         <div class="hand-zone">
-        <div class="cards big-cards {% if v.my_slot_count() > 6 %}many{% endif %}">
+        <div class="cards big-cards {% if v.my_slot_count() > 4 %}many{% endif %}" style="--hand-columns: {{ v.hand_columns() }}">
           {% for c in v.me_seat.as_ref().unwrap().slots %}
-            <div class="hand-slot">
+            <div class="hand-slot" data-effect-key="c{{ v.me_seat.as_ref().unwrap().id }}-{{ c.slot }}">
+            <span class="slot-number">{{ c.slot + 1 }}</span>
             {% if v.panel_info.own_click_cmd != "" %}
               <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
                 <input type="hidden" name="cmd" value="{{ v.panel_info.own_click_cmd }}">
                 <input type="hidden" name="slot" value="{{ c.slot }}">
-                <button type="submit" class="{{ c.css_class() }} big clickable {% if c.selected %}selected{% endif %}" title="{{ c.visibility_title() }}">
+                <button type="submit" class="{{ c.css_class() }} big clickable {% if c.selected %}selected{% endif %}" title="{{ c.visibility_title() }}" aria-label="选择自己的第 {{ c.slot + 1 }} 张牌{% if c.is_face() %}，{{ c.rank_text() }} 点{% endif %}" {% if v.panel_info.own_click_cmd == "peek_toggle" || v.panel_info.own_click_cmd == "swap_toggle" %}aria-pressed="{{ c.selected }}"{% endif %}>
                   {% if c.is_face() %}<span class="rank">{{ c.rank_text() }}</span>{% else %}<span class="rank">?</span>{% endif %}
                   {% if c.power_text() != "" %}<span class="pw">{{ c.power_text() }}</span>{% endif %}
                   {% if c.knows_badge() %}<span class="eye" title="{{ c.knower_count }} 人知道这张牌">👁{{ c.knower_count }}</span>{% endif %}
                 </button>
               </form>
             {% else %}
-              <div class="{{ c.css_class() }} big">
+              <div class="{{ c.css_class() }} big {% if c.selected %}selected{% endif %}">
                 {% if c.is_face() %}<span class="rank">{{ c.rank_text() }}</span>{% else %}<span class="rank">?</span>{% endif %}
                 {% if c.power_text() != "" %}<span class="pw">{{ c.power_text() }}</span>{% endif %}
                 {% if c.knows_badge() %}<span class="eye" title="{{ c.knower_count }} 人知道这张牌">👁{{ c.knower_count }}</span>{% endif %}
@@ -128,7 +130,7 @@
               </div>
           {% endfor %}
         </div>
-        {% if v.panel_info.is_drew || (v.panel_info.is_swap_sel && v.panel_info.swap_source_draw) %}
+        {% if v.panel_info.is_drew || v.panel_info.is_aim_peek || v.panel_info.is_aim_spy || v.panel_info.is_aim_swap || (v.panel_info.is_swap_sel && v.panel_info.swap_source_draw) %}
         <div class="drawn-box">
           <span class="drawn-hint">新摸牌</span>
           <div class="{{ v.drawn_css() }} big">
@@ -136,6 +138,8 @@
             {% if v.drawn_power_text() != "" %}<span class="pw">{{ v.drawn_power_text() }}</span>{% endif %}
           </div>
         </div>
+        {% else %}
+        <div class="drawn-box placeholder" aria-hidden="true"><span class="drawn-hint">新摸牌</span><div class="card big empty"></div></div>
         {% endif %}
         </div>
       </div>
@@ -217,12 +221,10 @@
           {% endif %}
           <p class="hint">已选 {{ v.panel_info.swap_count }} 张（至少 1 张）</p>
           <div class="btn-col">
-            {% if v.panel_info.swap_count >= 1 %}
             <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
               <input type="hidden" name="cmd" value="swap_commit">
-              <button type="submit" class="btn primary">确认交换</button>
+              <button type="submit" class="btn primary" {% if v.panel_info.swap_count == 0 %}disabled{% endif %}>确认交换（{{ v.panel_info.swap_count }} 张）</button>
             </form>
-            {% endif %}
             {% if v.panel_info.swap_can_cancel %}
             {% include "frag_cancel.html" %}
             {% endif %}
@@ -279,6 +281,29 @@
         {% endif %}
       </div>
 
+      {% if v.panel_info.other_click_cmd != "" %}
+      <div class="panel target-picker">
+        <div class="target-tabs" role="group" aria-label="选择目标玩家">
+          {% for o in v.opponents %}
+          <button type="button" class="btn ghost small target-tab" data-target-tab="{{ o.id }}" aria-pressed="false">{{ o.name }}</button>
+          {% endfor %}
+        </div>
+        {% for o in v.opponents %}
+        <div class="target-hand" data-target-hand="{{ o.id }}" aria-label="{{ o.name }} 的目标牌位">
+          {% for c in o.slots %}
+          <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
+            <input type="hidden" name="cmd" value="{{ v.panel_info.other_click_cmd }}">
+            <input type="hidden" name="player" value="{{ o.id }}">
+            <input type="hidden" name="slot" value="{{ c.slot }}">
+            <button type="submit" class="target-card" aria-label="选择 {{ o.name }} 的第 {{ c.slot + 1 }} 张牌">
+              <span>第 {{ c.slot + 1 }} 张</span><strong>{% if c.is_face() %}{{ c.rank_text() }}{% else %}?{% endif %}</strong>
+            </button>
+          </form>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
     </section>
 
     <aside class="side">
@@ -286,7 +311,7 @@
         <div class="log-title">牌局动态（仅你可见的情报也会显示在这里）</div>
         <div class="log-lines">
           {% for e in v.log %}
-          <div class="log-line k-{{ e.kind_str() }}">{{ e.text }}</div>
+          <div class="log-line k-{{ e.kind_str() }}" data-log-id="{{ e.id }}" data-action-kind="{{ e.kind_str() }}" data-action-targets="{{ e.targets }}">{{ e.text }}</div>
           {% endfor %}
         </div>
       </div>

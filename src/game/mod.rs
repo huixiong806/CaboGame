@@ -231,6 +231,27 @@ pub struct LogEntry {
     pub audience: Audience,
     pub kind: LogKind,
     pub text: String,
+    /// Public UI effects refer only to player/slot positions, never hidden card identities.
+    pub targets: Vec<LogTarget>,
+}
+
+#[derive(Clone, Debug)]
+pub enum LogTarget {
+    Player(PlayerId),
+    Slot(PlayerId, SlotId),
+    DrawPile,
+    DiscardPile,
+}
+
+impl LogTarget {
+    pub fn key(&self) -> String {
+        match self {
+            Self::Player(p) => format!("p{p}"),
+            Self::Slot(p, s) => format!("c{p}-{s}"),
+            Self::DrawPile => "deck".into(),
+            Self::DiscardPile => "discard".into(),
+        }
+    }
 }
 
 /// Typed public history for decision programs. No physical card IDs or secret ranks.
@@ -300,11 +321,15 @@ impl Session {
     }
 
     pub fn log_public(&mut self, kind: LogKind, text: impl Into<String>) {
-        self.log.push(LogEntry { audience: Audience::Public, kind, text: text.into() });
+        self.log.push(LogEntry { audience: Audience::Public, kind, text: text.into(), targets: Vec::new() });
+    }
+
+    pub fn log_action(&mut self, kind: LogKind, text: impl Into<String>, targets: Vec<LogTarget>) {
+        self.log.push(LogEntry { audience: Audience::Public, kind, text: text.into(), targets });
     }
 
     pub fn log_to(&mut self, who: PlayerId, kind: LogKind, text: impl Into<String>) {
-        self.log.push(LogEntry { audience: Audience::Player(who), kind, text: text.into() });
+        self.log.push(LogEntry { audience: Audience::Player(who), kind, text: text.into(), targets: Vec::new() });
     }
 
     /// 弃牌堆顶的牌。

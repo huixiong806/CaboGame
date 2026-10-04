@@ -82,6 +82,12 @@ impl SlotView {
         else if self.knower_count > 0 { "部分人已知" }
         else { "未知" }
     }
+    pub fn visibility_short_label(&self) -> &'static str {
+        if self.publicly_known { "公开" }
+        else if self.i_know { "我知" }
+        else if self.knower_count > 0 { "已看" }
+        else { "未知" }
+    }
     pub fn visibility_class(&self) -> &'static str {
         if self.publicly_known { "public" }
         else if self.i_know { "private" }
@@ -282,7 +288,7 @@ impl From<&Panel> for PanelInfo {
                 match my_slot {
                     Some(s) => {
                         info.aim_has_my_slot = true;
-                        info.aim_my_slot = *s;
+                        info.aim_my_slot = s + 1;
                         info.other_click_cmd = "pick_other".into();
                     }
                     None => info.own_click_cmd = "pick_own".into(),
@@ -293,7 +299,7 @@ impl From<&Panel> for PanelInfo {
                 info.swap_source_draw = matches!(source, super::Pile::Draw);
                 info.swap_drawn_rank = drawn.map(|r| r.to_string()).unwrap_or_default();
                 info.swap_count = *count;
-                info.swap_can_cancel = !info.swap_source_draw;
+                info.swap_can_cancel = true;
                 info.own_click_cmd = "swap_toggle".into();
             }
             Panel::ConfirmCabo => info.is_confirm = true,
@@ -314,8 +320,10 @@ impl From<&Panel> for PanelInfo {
 
 #[derive(Clone, Debug)]
 pub struct LogLine {
+    pub id: usize,
     pub kind: super::LogKind,
     pub text: String,
+    pub targets: String,
 }
 
 impl LogLine {
@@ -399,6 +407,23 @@ impl PlayerView {
     pub fn my_slot_count(&self) -> usize {
         self.me_seat.as_ref().map(|s| s.slots.len()).unwrap_or(0)
     }
+    pub fn hand_columns(&self) -> usize { self.my_slot_count().clamp(1, 5) }
+    pub fn interaction_mode(&self) -> &'static str {
+        match &self.panel {
+            Panel::PeekPick { .. } => "initial",
+            Panel::Idle { .. } => "idle",
+            Panel::Drew { .. } => "drawn",
+            Panel::AimPeek => "peek",
+            Panel::AimSpy => "other",
+            Panel::AimSwap { my_slot: Some(_) } => "other",
+            Panel::AimSwap { .. } => "own",
+            Panel::SwapSelecting { .. } => "multi",
+            Panel::ConfirmCabo => "confirm",
+            Panel::RoundEnd { .. } => "round-end",
+            Panel::GameOver { .. } => "game-over",
+            _ => "waiting",
+        }
+    }
 }
 
 /// 构建某视角的画面数据。`viewer = None` 表示观战。
@@ -416,6 +441,10 @@ pub fn project(session: &Session, viewer: Option<PlayerId>, host: PlayerId) -> P
             },
             Some(v),
         ) if *current == v => selected.clone(),
+        (
+            Phase::Turn { current, pending: Some(Pending::PowerAiming { my_slot: Some(slot), .. }) },
+            Some(v),
+        ) if *current == v => vec![*slot],
         _ => Vec::new(),
     };
 
@@ -508,13 +537,19 @@ pub fn project(session: &Session, viewer: Option<PlayerId>, host: PlayerId) -> P
     let log: Vec<LogLine> = session
         .log
         .iter()
-        .filter(|e| match e.audience {
+        .enumerate()
+        .filter(|(_, e)| match e.audience {
             Audience::Public => true,
             Audience::Player(p) => viewer == Some(p),
         })
         .rev()
         .take(30)
-        .map(|e| LogLine { kind: e.kind, text: e.text.clone() })
+        .map(|(i, e)| LogLine {
+            id: i + 1,
+            kind: e.kind,
+            text: e.text.clone(),
+            targets: e.targets.iter().map(super::LogTarget::key).collect::<Vec<_>>().join(" "),
+        })
         .collect();
 
     // 行动 A 摸到的牌（仅自己可见）与交换暂存中从摸牌堆获得的牌。

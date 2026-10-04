@@ -553,6 +553,100 @@ fn draw_action_discard_only_with_power() {
 }
 
 #[test]
+fn power_notices_identify_slots_without_exposing_private_values() {
+    use cabo::game::{Audience, PowerKind};
+    for memory_mode in [false, true] {
+        for stepped in [false, true] {
+            for (rank, power, kind, expected, target_keys) in [
+                (7, PowerUse::PeekOwn { slot: 2 }, PowerKind::Peek,
+                    "P1 发动【偷看】，查看自己的第 3 张牌；弃置了 7", "p0 discard c0-2"),
+                (10, PowerUse::Spy { player: 1, slot: 2 }, PowerKind::Spy,
+                    "P1 发动【间谍】，查看 P2 的第 3 张牌；弃置了 10", "p0 discard p1 c1-2"),
+                (12, PowerUse::Swap { my_slot: 2, player: 1, slot: 3 }, PowerKind::Swap,
+                    "P1 发动【交换】，自己的第 3 张牌 ⇄ P2 的第 4 张牌（不看牌面）；弃置了 12", "p0 discard c0-2 p1 c1-3"),
+            ] {
+                let mut s = human_session_with(3, Settings { memory_mode, ..Settings::default() });
+                s.start_game().unwrap();
+                peek_all(&mut s);
+                let before = s.log.len();
+                put_on_deck_top(&mut s, rank);
+                s.phase = Phase::Turn { current: 0, pending: None };
+                s.apply(0, &Command::BeginDraw).unwrap();
+                if stepped {
+                    s.apply(0, &Command::ArmPower { kind }).unwrap();
+                    match power {
+                        PowerUse::PeekOwn { slot } => s.apply(0, &Command::PowerPickOwn { slot }).unwrap(),
+                        PowerUse::Spy { player, slot } => s.apply(0, &Command::PowerPickOther { player, slot }).unwrap(),
+                        PowerUse::Swap { my_slot, player, slot } => {
+                            s.apply(0, &Command::PowerPickOwn { slot: my_slot }).unwrap();
+                            s.apply(0, &Command::PowerPickOther { player, slot }).unwrap();
+                        }
+                    }
+                } else {
+                    s.apply(0, &Command::DiscardDrawn { power: Some(power) }).unwrap();
+                }
+                let public: Vec<_> = s.log[before..].iter().filter(|e| e.audience == Audience::Public).collect();
+                assert_eq!(public.len(), 2, "one draw and one complete ability notice");
+                assert_eq!(public[1].text, expected);
+                for viewer in [Some(0), Some(1), Some(2), None] {
+                    let v = project(&s, viewer, 0);
+                    assert_eq!(v.log[0].text, expected);
+                    assert_eq!(v.log[0].targets, target_keys);
+                    if viewer != Some(0) {
+                        assert!(!v.log.iter().any(|e| e.text.starts_with("你偷看") || e.text.starts_with("P2 的第 3 张牌是")));
+                    }
+                }
+                assert!(s.log.iter().filter(|e| e.audience == Audience::Player(0)).all(|e| e.targets.is_empty()));
+            }
+        }
+    }
+}
+
+#[test]
+fn backing_out_of_draw_choices_keeps_the_same_card_and_turn() {
+    use cabo::game::PowerKind;
+    for kind in [None, Some(PowerKind::Peek), Some(PowerKind::Spy), Some(PowerKind::Swap)] {
+        let mut s = human_session(3);
+        s.start_game().unwrap();
+        peek_all(&mut s);
+        let rank = match kind { Some(PowerKind::Peek) => 7, Some(PowerKind::Spy) => 10, _ => 12 };
+        let drawn = put_on_deck_top(&mut s, rank);
+        s.phase = Phase::Turn { current: 0, pending: None };
+        s.apply(0, &Command::BeginDraw).unwrap();
+        let deck = s.deck.clone();
+        let discard = s.discard.clone();
+        let hands: Vec<_> = s.players.iter().map(|p| p.slots.clone()).collect();
+        let events = s.public_events.len();
+        if let Some(kind) = kind {
+            s.apply(0, &Command::ArmPower { kind }).unwrap();
+            if kind == PowerKind::Swap {
+                s.apply(0, &Command::PowerPickOwn { slot: 2 }).unwrap();
+                let view = project(&s, Some(0), 0);
+                assert_eq!(view.interaction_mode(), "other");
+                assert!(view.me_seat.unwrap().slots[2].selected);
+                assert!(!project(&s, Some(1), 0).all_seats[0].slots.iter().any(|c| c.selected));
+            }
+        } else {
+            s.apply(0, &Command::DrawSwap { slots: vec![] }).unwrap();
+            s.apply(0, &Command::SwapToggle { slot: 1 }).unwrap();
+            assert!(project(&s, Some(0), 0).panel_info.swap_can_cancel);
+        }
+        s.apply(0, &Command::Cancel).unwrap();
+        assert!(matches!(s.phase, Phase::Turn { current: 0, pending: Some(Pending::Drew { card }) } if card == drawn));
+        assert_eq!(s.deck, deck);
+        assert_eq!(s.discard, discard);
+        assert_eq!(s.players.iter().map(|p| p.slots.clone()).collect::<Vec<_>>(), hands);
+        assert_eq!(s.public_events.len(), events);
+        assert_eq!(project(&s, Some(0), 0).drawn, Some(rank));
+        assert!(s.apply(0, &Command::BeginDraw).is_err(), "returning must not grant a second draw");
+        assert_eq!(s.deck, deck);
+        s.apply(0, &Command::DiscardDrawn { power: None }).unwrap();
+        assert_eq!(s.discard.last(), Some(&drawn));
+        assert_eq!(s.actor(), Some(1));
+    }
+}
+
+#[test]
 fn spy_and_swap_powers() {
     let mut s = human_session(2);
     s.start_game().unwrap();

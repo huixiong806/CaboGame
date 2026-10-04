@@ -28,6 +28,7 @@ pub fn router(state: AppState) -> Router {
         .route("/static/htmx.min.js", get(serve_htmx))
         .route("/static/ext-sse.js", get(serve_sse_ext))
         .route("/static/style.css", get(serve_css))
+        .route("/static/room.js", get(serve_room_js))
         .route("/create", post(create))
         .route("/join", post(join))
         .route("/room/{code}", get(room_page))
@@ -58,6 +59,13 @@ async fn serve_css() -> impl IntoResponse {
     (
         [(axum::http::header::CONTENT_TYPE, "text/css; charset=utf-8")],
         include_str!("../../static/style.css"),
+    )
+}
+
+async fn serve_room_js() -> impl IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "application/javascript; charset=utf-8")],
+        include_str!("../../static/room.js"),
     )
 }
 

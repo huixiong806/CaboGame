@@ -25,7 +25,19 @@ use crate::game::view::{project, PlayerView};
 use crate::game::{Command, Phase, PlayerId, PlayerState, Session, Settings};
 
 /// AI 出牌思考时间（毫秒），让真人能看清节奏。
-pub const AI_THINK_MS: u64 = 900;
+pub const AI_THINK_MS: u64 = 2000;
+
+/// Give a completed exchange/power extra reading time before the next AI step.
+/// This is presentation pacing only; simulation and bot decision budgets are unchanged.
+fn ai_pause_ms(session: &Session) -> u64 {
+    let last_public = session.log.iter().rev().find(|entry| {
+        matches!(entry.audience, crate::game::Audience::Public)
+    });
+    match last_public.map(|entry| entry.kind) {
+        Some(crate::game::LogKind::Power | crate::game::LogKind::Swap | crate::game::LogKind::Cabo) => 2800,
+        _ => AI_THINK_MS,
+    }
+}
 /// 房间无活动且无连接时的回收时间。
 const ROOM_IDLE: Duration = Duration::from_secs(60 * 60 * 2);
 const ROOM_CODE_ALPHABET: &[u8] = b"23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -239,12 +251,10 @@ async fn ai_loop(room: Arc<Room>, bots: BotRegistry) {
         loop {
             let pending = {
                 let inner = room.inner_lock();
-                ai_job(&inner, &bots).map(|(pid, _, _)| pid)
+                ai_job(&inner, &bots).map(|_| ai_pause_ms(&inner.session))
             };
-            if pending.is_none() {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(AI_THINK_MS)).await;
+            let Some(pause_ms) = pending else { break };
+            tokio::time::sleep(Duration::from_millis(pause_ms)).await;
             // 睡眠期间状态可能变化（真人行动 / 房主调整），重新取视图与命令。
             let job = {
                 let inner = room.inner_lock();

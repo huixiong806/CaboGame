@@ -207,7 +207,7 @@ input:focus, select:focus { border-color: var(--accent); }
   border-radius: var(--radius); padding: 10px 12px;
   transition: border-color .2s ease, box-shadow .2s ease;
 }
-.seat.turn { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 22px rgba(45, 212, 191, .15); }
+.seat.turn .pname::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 .seat.caller { border-color: var(--danger); }
 .seat.me { background: var(--panel-2); }
 
@@ -222,7 +222,8 @@ input:focus, select:focus { border-color: var(--accent); }
 .cards { display: flex; gap: 8px; flex-wrap: wrap; align-content: flex-start; }
 .cards.small { min-height: 62px; }
 .cards.big-cards { min-height: 100px; }
-.hand-zone { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px; }
+.hand-zone { display: grid; grid-template-columns: minmax(0, max-content) 70px; align-items: flex-start; gap: 18px; }
+.drawn-box.placeholder { visibility: hidden; pointer-events: none; }
 .hand-slot { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .card-visibility {
   font-size: 10px; line-height: 1.4; white-space: nowrap;
@@ -352,6 +353,37 @@ form { display: contents; }
 .log-line.k-cabo { color: var(--gold); font-weight: 600; }
 .log-line.k-score { color: var(--text); background: rgba(45, 212, 191, .08); }
 
+/* Only the latest action's target cards get a small, non-interactive marker. */
+.hand-slot { position: relative; }
+.slot-number { align-self: center; color: var(--muted); font-size: 10px; line-height: 1; }
+.hand-slot.action-highlight::after { content: attr(data-effect-icon); position: absolute; top: 18px; right: 1px; z-index: 2; background: var(--power); color: var(--bg); border-radius: 50%; width: 20px; height: 20px; display: grid; place-items: center; font-size: 13px; pointer-events: none; animation: notice-in .2s ease-out; }
+.activity-feed { position: sticky; top: 55px; z-index: 8; background: var(--bg); padding: 6px 0 10px; margin-bottom: 8px; }
+.turn-status { font-size: 13px; font-weight: 700; color: var(--muted); padding: 0 3px 5px; }
+.turn-status.your-turn { color: var(--accent); }
+.action-notices { height: 42px; overflow-y: auto; padding: 6px 3px; font-size: 12px; color: var(--muted); }
+.action-notice { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; color: var(--text); font-size: 14px; line-height: 1.55; }
+.notice-actor { max-width: 10em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notice-verb { color: var(--accent); font-weight: 700; }
+.notice-target { padding: 1px 6px; border-radius: 4px; background: var(--panel-2); font-size: 13px; }
+.notice-result { color: var(--muted); font-size: 12px; }
+.notice-power .notice-verb, .notice-peek .notice-verb { color: var(--power); }
+.notice-cabo .notice-verb { color: var(--gold); }
+.notice-icon { flex: 0 0 18px; color: var(--accent); font-size: 16px; }
+.notice-power .notice-icon, .notice-peek .notice-icon { color: var(--power); }
+.notice-cabo .notice-icon { color: var(--gold); }
+.target-picker { padding: 10px; }
+.target-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.target-tab { flex: 1 1 80px; min-height: 44px; }
+.target-tab.active { border-color: var(--power); color: var(--power); background: #302447; }
+.target-hand { display: flex; flex-wrap: wrap; gap: 8px; }
+.target-hand[hidden] { display: none; }
+.target-card { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 52px; min-height: 68px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--panel); cursor: pointer; padding: 6px; }
+.target-card span { color: var(--muted); font-size: 11px; }
+.target-card strong { font-size: 22px; }
+.target-card:hover, .target-card:focus-visible { border-color: var(--power); outline: 2px solid var(--power); }
+@keyframes notice-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .action-highlight, .log-fresh, .action-notice { animation: none; } }
+
 /* ---------------------------------------------------------------- 响应式 */
 
 @media (max-width: 980px) {
@@ -360,8 +392,7 @@ form { display: contents; }
   .log-lines { max-height: 180px; }
   .opponents { justify-content: center; }
   .center-row { justify-content: center; }
-  .cards.big-cards { justify-content: center; }
-  .hand-zone { justify-content: center; }
+  .cards.big-cards { justify-content: flex-start; }
 }
 
 @media (max-width: 520px) {
@@ -369,23 +400,36 @@ form { display: contents; }
   .table { padding: 10px; gap: 12px; }
   .seat.me { padding: 10px; }
   .cards { gap: 6px; }
-  .opponents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .opponents .seat { padding: 8px; }
-  .cards.small { gap: 4px; }
-  .cards.small .hand-slot { flex: 0 0 calc((100% - 12px) / 4); min-width: 0; }
-  .cards.small .card { width: clamp(24px, 7vw, 30px); height: 44px; }
-  .cards.small .rank { font-size: 17px; }
-  .cards.small .pw { font-size: 7px; padding: 1px 2px; }
-  .cards.small .card-visibility { font-size: 8px; max-width: 100%; white-space: normal; text-align: center; }
-  .cards.big-cards .card.big { width: clamp(44px, 13.5vw, 54px); height: 78px; }
+  .opponents { display: grid; grid-template-columns: repeat(var(--opponent-count), minmax(0, 1fr)); gap: 6px; }
+  .opponents .seat { padding: 6px; }
+  .opponents .seat-head { gap: 4px; }
+  .opponents .pname { font-size: 12px; }
+  .opponents .tag { font-size: 9px; padding: 1px 4px; }
+  .cards.small { gap: 2px; min-height: 64px; }
+  .cards.small .hand-slot { flex: 0 0 calc((100% - 6px) / 4); min-width: 0; }
+  .cards.small .card { width: 100%; max-width: 30px; height: 34px; }
+  .cards.small .rank { font-size: 14px; }
+  .cards.small .pw { display: none; }
+  .cards.small .card-visibility { font-size: 0; padding: 2px 0; max-width: 100%; white-space: nowrap; text-align: center; }
+  .cards.small .card-visibility::after { content: attr(data-short-label); font-size: 8px; }
+  .cards.small .hand-slot.action-highlight::after { width: 15px; height: 15px; font-size: 10px; right: 0; }
+  .cards.big-cards { display: grid; grid-template-columns: repeat(var(--hand-columns), minmax(0, 1fr)); gap: 6px; min-height: 100px; }
+  .cards.big-cards .card.big, .cards.big-cards.many .card.big { width: 100%; max-width: 54px; height: auto; aspect-ratio: 54 / 78; min-height: 62px; }
   .cards.big-cards .card-visibility { font-size: 9px; padding: 2px 3px; }
   .card.big .rank { font-size: 25px; }
-  .hand-zone { gap: 8px; }
+  .hand-zone { grid-template-columns: minmax(0, 1fr) 44px; gap: 8px; }
   .drawn-box .card.big { width: clamp(36px, 10.5vw, 44px); height: 70px; }
   .drawn-hint { font-size: 11px; }
   .action-panel .btn-col form { flex: 1 1 0; min-width: 0; }
   .action-panel .btn { padding: 9px 6px; font-size: 12px; }
   .status-strip { gap: 8px 12px; padding: 8px 10px; }
+  .activity-feed { top: 53px; padding-bottom: 6px; }
+  .action-notices { height: 58px; }
+  .target-card { flex: 1; min-width: 44px; }
+}
+
+@media (max-width: 360px) {
+  .cards.big-cards.many { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 /* 记忆模式 */

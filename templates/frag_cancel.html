@@ -1,4 +1,4 @@
 <form method="post" action="/room/{{ code }}/cmd?t={{ token }}">
   <input type="hidden" name="cmd" value="cancel">
-  <button type="submit" class="btn ghost small">取消</button>
+  <button type="submit" class="btn ghost small">{% if v.panel_info.is_aim_peek || v.panel_info.is_aim_spy || v.panel_info.is_aim_swap || v.panel_info.swap_source_draw %}返回摸牌选择{% else %}取消{% endif %}</button>
 </form>

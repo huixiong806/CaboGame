@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %} · 房间 {{ code }}{% endblock %}
+{% block scripts %}<script src="/static/room.js" defer></script>{% endblock %}
 {% block content %}
 <header class="topbar">
   <a class="brand" href="/">CABO</a>
@@ -10,6 +11,10 @@
 </header>
 
 <main class="stage">
+  <div class="activity-feed">
+    <div id="turn-status" class="turn-status" aria-live="polite"></div>
+    <div id="action-notices" class="action-notices" role="status" aria-live="polite" aria-relevant="text"></div>
+  </div>
   <div hx-ext="sse" sse-connect="/room/{{ code }}/events?t={{ token }}">
     <div sse-swap="board" id="board">{{ board|safe }}</div>
   </div>

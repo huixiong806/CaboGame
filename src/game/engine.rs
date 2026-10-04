@@ -9,7 +9,7 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 
 use super::{
-    power_kind_of, Card, CardId, CardState, Command, GameError, LogKind, Pending, Phase, Pile,
+    power_kind_of, Card, CardId, CardState, Command, GameError, LogKind, LogTarget, Pending, Phase, Pile,
     PlayerId, PowerKind, PowerUse, RANK_COPIES, Session, SlotId, INITIAL_SLOTS,
 };
 
@@ -197,8 +197,8 @@ impl Session {
         let rb = self.rank_str(self.players[pid].slots[b as usize]);
         self.record_private_peek(
             pid,
-            format!("你查看了自己的槽位 {a} 和 {b}：{ra}、{rb}"),
-            &format!("你查看了自己的槽位 {a} 和 {b}"),
+            format!("你查看了自己的第 {}、{} 张牌：{ra}、{rb}", a + 1, b + 1),
+            &format!("你查看了自己的第 {}、{} 张牌", a + 1, b + 1),
         );
 
         let Phase::Peeking { done } = &mut self.phase else { unreachable!() };
@@ -211,9 +211,10 @@ impl Session {
         let names: Vec<String> = self.players.iter().map(|p| p.name.clone()).collect();
         for (i, slots) in &picks {
             self.public_events.push(super::PublicEvent::InitialPeek { player: *i, slots: *slots });
-            self.log_public(
+            self.log_action(
                 LogKind::Peek,
-                format!("{} 查看了自己的槽位 {} 和 {}", names[*i], slots[0], slots[1]),
+                format!("{} 查看了自己的第 {}、{} 张牌", names[*i], slots[0] + 1, slots[1] + 1),
+                vec![LogTarget::Player(*i), LogTarget::Slot(*i, slots[0]), LogTarget::Slot(*i, slots[1])],
             );
         }
         let starter = self.rng.random_range(0..self.players.len());
@@ -264,7 +265,7 @@ impl Session {
         let card = self.deck.pop().ok_or(GameError::Invalid("摸牌堆已耗尽"))?;
         self.cards[card as usize].known_by.insert(pid);
         let name = self.players[pid].name.clone();
-        self.log_public(LogKind::Info, format!("{name} 从摸牌堆抽了一张牌"));
+        self.log_action(LogKind::Info, format!("{name} 从摸牌堆抽了一张牌"), vec![LogTarget::Player(pid), LogTarget::DrawPile]);
         self.record_private_peek(
             pid,
             format!("你抽到了 {}", self.rank_str(card)),
@@ -287,7 +288,7 @@ impl Session {
         if let Some(pu) = power {
             self.execute_power(pid, card, pu)?;
         }
-        self.discard_drawn_public(pid, card, power.is_some());
+        self.discard_drawn_public(pid, card, power);
         self.set_pending(None);
         self.finish_turn();
         Ok(())
@@ -316,7 +317,7 @@ impl Session {
             PowerKind::Peek => {
                 self.set_pending(None);
                 self.execute_power(pid, card, PowerUse::PeekOwn { slot })?;
-                self.discard_drawn_public(pid, card, true);
+                self.discard_drawn_public(pid, card, Some(PowerUse::PeekOwn { slot }));
                 self.finish_turn();
             }
             PowerKind::Swap => {
@@ -346,14 +347,14 @@ impl Session {
             PowerKind::Spy => {
                 self.set_pending(None);
                 self.execute_power(pid, card, PowerUse::Spy { player: target, slot })?;
-                self.discard_drawn_public(pid, card, true);
+                self.discard_drawn_public(pid, card, Some(PowerUse::Spy { player: target, slot }));
                 self.finish_turn();
             }
             PowerKind::Swap => {
                 let my = my_slot.ok_or(GameError::Invalid("请先选择自己的槽位"))?;
                 self.set_pending(None);
                 self.execute_power(pid, card, PowerUse::Swap { my_slot: my, player: target, slot })?;
-                self.discard_drawn_public(pid, card, true);
+                self.discard_drawn_public(pid, card, Some(PowerUse::Swap { my_slot: my, player: target, slot }));
                 self.finish_turn();
             }
             PowerKind::Peek => return Err(GameError::Invalid("请选择自己的槽位")),
@@ -362,37 +363,47 @@ impl Session {
     }
 
     /// 行动 A 收尾：把刚抽的牌公开进弃牌堆（能力已结算）。
-    fn discard_drawn_public(&mut self, pid: PlayerId, card: CardId, powered: bool) {
+    fn discard_drawn_public(&mut self, pid: PlayerId, card: CardId, power: Option<PowerUse>) {
         self.public_events.push(super::PublicEvent::Discard {
-            player: pid, rank: self.cards[card as usize].card.rank, powered,
+            player: pid, rank: self.cards[card as usize].card.rank, powered: power.is_some(),
         });
         let rank = self.rank_str(card);
         let name = self.players[pid].name.clone();
         self.cards[card as usize].revealed = true;
         self.cards[card as usize].known_by = (0..self.players.len()).collect();
         self.discard.push(card);
-        if powered {
-            self.log_public(LogKind::Power, format!("{name} 发动能力后弃置了 {rank}"));
-        } else {
-            self.log_public(LogKind::Info, format!("{name} 弃置了 {rank}"));
-        }
+        let mut targets = vec![LogTarget::Player(pid), LogTarget::DiscardPile];
+        let (kind, text) = match power {
+            Some(PowerUse::PeekOwn { slot }) => {
+                targets.push(LogTarget::Slot(pid, slot));
+                (LogKind::Power, format!("{name} 发动【偷看】，查看自己的第 {} 张牌；弃置了 {rank}", slot + 1))
+            }
+            Some(PowerUse::Spy { player, slot }) => {
+                targets.extend([LogTarget::Player(player), LogTarget::Slot(player, slot)]);
+                (LogKind::Power, format!("{name} 发动【间谍】，查看 {} 的第 {} 张牌；弃置了 {rank}", self.players[player].name, slot + 1))
+            }
+            Some(PowerUse::Swap { my_slot, player, slot }) => {
+                targets.extend([LogTarget::Slot(pid, my_slot), LogTarget::Player(player), LogTarget::Slot(player, slot)]);
+                (LogKind::Swap, format!("{name} 发动【交换】，自己的第 {} 张牌 ⇄ {} 的第 {} 张牌（不看牌面）；弃置了 {rank}", my_slot + 1, self.players[player].name, slot + 1))
+            }
+            None => (LogKind::Info, format!("{name} 弃置了 {rank}")),
+        };
+        self.log_action(kind, text, targets);
     }
 
     /// 结算一次能力使用（不做阶段检查，供逐步命令共用）。
     fn execute_power(&mut self, pid: PlayerId, card: CardId, pu: PowerUse) -> Result<(), GameError> {
         let rank = self.cards[card as usize].card.rank;
         let kind = power_kind_of(rank).ok_or(GameError::Invalid("这张牌没有能力"))?;
-        let name = self.players[pid].name.clone();
         match (kind, pu) {
             (PowerKind::Peek, PowerUse::PeekOwn { slot }) => {
                 let cid = self.hand_card(pid, slot)?;
                 self.cards[cid as usize].known_by.insert(pid);
                 let r = self.rank_str(cid);
-                self.log_public(LogKind::Power, format!("{name} 发动【偷看】，查看自己的槽位 {slot}"));
                 self.record_private_peek(
                     pid,
-                    format!("你偷看自己的槽位 {slot}：{r}"),
-                    &format!("你偷看了自己的槽位 {slot}"),
+                    format!("你偷看自己的第 {} 张牌：{r}", slot + 1),
+                    &format!("你偷看了自己的第 {} 张牌", slot + 1),
                 );
             }
             (PowerKind::Spy, PowerUse::Spy { player, slot }) => {
@@ -403,14 +414,10 @@ impl Session {
                 self.cards[cid as usize].known_by.insert(pid);
                 let target_name = self.players[player].name.clone();
                 let r = self.rank_str(cid);
-                self.log_public(
-                    LogKind::Power,
-                    format!("{name} 发动【间谍】，查看了 {target_name} 的槽位 {slot}"),
-                );
                 self.record_private_peek(
                     pid,
-                    format!("{target_name} 的槽位 {slot} 是 {r}"),
-                    &format!("你查看了 {target_name} 的槽位 {slot}"),
+                    format!("{target_name} 的第 {} 张牌是 {r}", slot + 1),
+                    &format!("你查看了 {target_name} 的第 {} 张牌", slot + 1),
                 );
             }
             (PowerKind::Swap, PowerUse::Swap { my_slot, player, slot }) => {
@@ -422,13 +429,6 @@ impl Session {
                 // 牌互换位置；known_by 属于牌本身，随牌移动（集合不变）。
                 self.players[pid].slots[my_slot as usize] = b;
                 self.players[player].slots[slot as usize] = a;
-                let target_name = self.players[player].name.clone();
-                self.log_public(
-                    LogKind::Swap,
-                    format!(
-                        "{name} 发动【交换】：自己的槽位 {my_slot} 与 {target_name} 的槽位 {slot} 交换（双方不看牌面）"
-                    ),
-                );
             }
             _ => return Err(GameError::Invalid("能力与目标不匹配")),
         }
@@ -526,7 +526,7 @@ impl Session {
             }
         };
         let name = self.players[pid].name.clone();
-        let slots_txt = selected.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("、");
+        let slots_txt = selected.iter().map(|s| (s + 1).to_string()).collect::<Vec<_>>().join("、");
         let ranks: Vec<u8> = selected
             .iter()
             .filter_map(|&s| self.hand_card(pid, s).ok())
@@ -534,6 +534,13 @@ impl Session {
             .collect();
 
         let all_success = selected.len() == 1 || ranks.iter().all(|&r| r == ranks[0]);
+        let mut targets = vec![LogTarget::Player(pid), LogTarget::DiscardPile];
+        if all_success {
+            targets.push(LogTarget::Slot(pid, selected[0]));
+        } else {
+            targets.extend(selected.iter().map(|&s| LogTarget::Slot(pid, s)));
+            targets.push(LogTarget::Slot(pid, self.players[pid].slots.len() as SlotId));
+        }
         self.public_events.push(super::PublicEvent::Exchange {
             player: pid, source, slots: selected.clone(), exposed: ranks.clone(),
             incoming: if source == Pile::Discard { Some(self.cards[taken as usize].card.rank) } else { None },
@@ -560,26 +567,29 @@ impl Session {
                         // 换出的牌是正面朝上进入弃牌堆的（引擎里已标 revealed/known_by=全体），
                         // 属于公开信息 —— 必须写进日志，否则只有"当下看一眼堆顶"才能知道，
                         // 而 AI 只在自己决策点拿视图，会被后续动作压掉。
-                        self.log_public(
+                        self.log_action(
                             LogKind::Swap,
                             format!("{name} 亮出槽位 {slots_txt} 的 {out_txt}，换入弃牌堆顶的 {tr}"),
+                            targets.clone(),
                         );
                     }
                     Pile::Draw => {
                         let out_txt =
                             ranks.iter().map(|r| r.to_string()).collect::<Vec<_>>().join(" ");
-                        self.log_public(
+                        self.log_action(
                             LogKind::Swap,
                             format!("{name} 把刚摸的牌与槽位 {slots_txt} 交换，亮出 {out_txt}"),
+                            targets.clone(),
                         );
                     }
                 }
             } else {
-                self.log_public(
+                self.log_action(
                     LogKind::Swap,
                     format!(
                         "{name} 翻开槽位 {slots_txt}：{ranks_txt} —— 点数相同，交换成功！新牌留在首个被选位置，其余空位压缩"
                     ),
+                    targets.clone(),
                 );
             }
         } else {
@@ -597,11 +607,12 @@ impl Session {
                 Pile::Discard => "弃牌堆".to_string(),
                 Pile::Draw => "摸牌堆".to_string(),
             };
-            self.log_public(
+            self.log_action(
                 LogKind::Swap,
                 format!(
                     "{name} 翻开槽位 {slots_txt}：{ranks_txt} —— 存在不相同的牌，交换失败！这些牌保持明置，从{source_txt}获得的牌暗置加入手牌末尾"
                 ),
+                targets,
             );
         }
         self.set_pending(None);
@@ -653,7 +664,7 @@ impl Session {
         }
         self.extra_turns = queue;
         let name = self.players[pid].name.clone();
-        self.log_public(LogKind::Cabo, format!("📣 {name} 宣告 Cabo！其余玩家各再行动一次"));
+        self.log_action(LogKind::Cabo, format!("📣 {name} 宣告 Cabo！其余玩家各再行动一次"), vec![LogTarget::Player(pid)]);
         self.set_pending(None);
         self.finish_turn();
         Ok(())
@@ -663,16 +674,17 @@ impl Session {
 
     fn cmd_cancel(&mut self, pid: PlayerId) -> Result<(), GameError> {
         self.require_turn(pid)?;
-        match self.phase_turn()?.1 {
-            // 交换-弃牌堆来源未获得秘密信息，可取消；摸牌堆来源已秘密查看，必须完成交换。
+        match self.phase_turn()?.1.cloned() {
+            // Return to the decision about the SAME drawn card; never undo the draw.
+            Some(Pending::SwapSelecting { card, source: Pile::Draw, .. })
+            | Some(Pending::PowerAiming { card, .. }) => {
+                self.set_pending(Some(Pending::Drew { card }));
+                Ok(())
+            }
             Some(Pending::SwapSelecting { source: Pile::Discard, .. })
-            | Some(Pending::PowerAiming { .. })
             | Some(Pending::ConfirmCabo) => {
                 self.set_pending(None);
                 Ok(())
-            }
-            Some(Pending::SwapSelecting { source: Pile::Draw, .. }) => {
-                Err(GameError::Invalid("已从摸牌堆获得的牌必须完成交换"))
             }
             Some(Pending::Drew { .. }) => Err(GameError::Invalid("已抽的牌必须弃置或交换")),
             None => Err(GameError::Invalid("没有可取消的操作")),
