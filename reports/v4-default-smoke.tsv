@@ -1,0 +1,10 @@
+# Args { candidate: "v4", compare: Some("challenger"), opponents: ["challenger"], cfg: [], compare_cfg: [], opponent_cfg: [], players: 4, blocks: 4, seed: 101004, jobs: 4, target: 100, out: Some("reports\\v4-default-smoke.tsv") }
+block	seed	bot	games	mean_gap	win_share	decisions	decision_us	max_us	calls	successes
+0	101004	v4	4	13.75	0.25	271	46089091	241932	6	4
+0	101004	challenger	4	23	0.25	262	3954	91	5	3
+1	11400714819323299489	v4	4	22.75	0.25	266	45380519	246557	4	2
+1	11400714819323299489	challenger	4	21	0.25	262	3951	26	6	3
+2	4354685564936946358	v4	4	-0.25	0.5	344	57888590	243849	5	5
+2	4354685564936946358	challenger	4	19.5	0.25	301	4567	173	6	3
+3	15755400384260144843	v4	4	9.5	0.25	344	58522173	244162	8	3
+3	15755400384260144843	challenger	4	15.25	0.25	322	4098	30	8	3

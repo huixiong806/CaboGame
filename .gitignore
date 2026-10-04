@@ -17,6 +17,23 @@
 # Windows 下的调试符号（本仓库仅在 target/ 内产生）
 *.pdb
 
+# 本地训练数据、模型文件、可执行文件与 Python 缓存（所有分支均不上传）
+/data/
+*.bin
+*.exe
+*.dll
+*.lib
+*.obj
+*.o
+*.a
+*.so
+*.dylib
+*.pt
+*.pth
+*.onnx
+*.pyc
+__pycache__/
+
 # 注意：Cargo.lock 必须提交（本仓库提供 cabo-server / cabo-sim 二进制），
 #       故此处显式不忽略，用于锁定依赖版本、保证可复现构建。
 

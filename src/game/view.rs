@@ -41,6 +41,8 @@ pub struct SlotView {
     pub i_know: bool,
     /// 知道这张牌的人数（公共知识，人人都可见）。
     pub knower_count: usize,
+    /// Exact public knowledge membership. This exposes no additional rank information.
+    pub known_by: Vec<PlayerId>,
     /// 是否被当前玩家点选（初始查看 / 交换选择暂存）。
     pub selected: bool,
 }
@@ -305,6 +307,9 @@ pub struct PlayerView {
     pub deck_count: usize,
     pub discard_top: Option<u8>,
     pub discard_count: usize,
+    /// All cards in this public pile, bottom to top, as a perfect public memory.
+    pub discard_ranks: Vec<u8>,
+    pub public_events: Vec<super::PublicEvent>,
     /// 我抽到尚未弃置的牌（行动 A，仅自己可见其点数）。
     pub drawn: Option<u8>,
     pub panel: Panel,
@@ -406,6 +411,7 @@ pub fn project(session: &Session, viewer: Option<PlayerId>, host: PlayerId) -> P
                     revealed,
                     i_know,
                     knower_count,
+                    known_by: cs.known_by.iter().copied().collect(),
                     selected: is_me && my_selected.contains(&s),
                 }
             })
@@ -496,6 +502,8 @@ pub fn project(session: &Session, viewer: Option<PlayerId>, host: PlayerId) -> P
         deck_count: session.deck.len(),
         discard_top: session.discard_top().map(|c| session.cards[c as usize].card.rank),
         discard_count: session.discard.len(),
+        discard_ranks: session.discard.iter().map(|&c| session.cards[c as usize].card.rank).collect(),
+        public_events: session.public_events.clone(),
         drawn,
         panel,
         panel_info,
