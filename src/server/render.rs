@@ -49,9 +49,14 @@ pub struct LobbySeat {
     pub id: usize,
     pub name: String,
     pub is_ai: bool,
+    pub bot_id: String,
     pub is_host: bool,
     pub vacant: bool,
     pub is_me: bool,
+}
+
+impl LobbySeat {
+    pub fn ai_label(&self) -> &'static str { crate::game::view::bot_label(&self.bot_id) }
 }
 
 #[derive(Template)]
@@ -93,6 +98,7 @@ pub fn render_board(
                 id: i,
                 name: p.name.clone(),
                 is_ai: p.is_ai,
+                bot_id: p.bot_id.clone(),
                 is_host: i == inner.host,
                 vacant: !p.is_ai && p.token.is_none(),
                 is_me: pid == Some(i),

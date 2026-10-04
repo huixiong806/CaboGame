@@ -263,6 +263,7 @@ impl Sampler {
             totals: view.all_seats.iter().map(|s| s.total_score).collect(),
             round_scores: vec![0; n],
             score_reset_used: view.all_seats.iter().map(|s| s.score_reset_used).collect(),
+            special_tactics: true,
             penalty: view.cabo_penalty,
             target: view.target_score,
             public_hash: 0,

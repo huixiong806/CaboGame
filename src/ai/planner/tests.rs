@@ -46,6 +46,7 @@ fn exact_state(s: &Session) -> State {
         discard: s.discard.iter().map(|&c| c as u8).collect(),
         totals: s.players.iter().map(|p| p.total_score).collect(),
         score_reset_used: s.players.iter().map(|p| p.score_reset_used).collect(),
+        special_tactics: true,
         round_scores: s
             .players
             .iter()
@@ -383,6 +384,213 @@ fn reset_entitlement_survives_both_beliefs_and_changes_information_key() {
     );
 }
 
+fn draw_rank_next(s: &mut Session, rank: u8) {
+    let i = s
+        .deck
+        .iter()
+        .position(|&id| s.cards[id as usize].card.rank == rank)
+        .unwrap();
+    let id = s.deck.remove(i);
+    s.deck.push(id);
+}
+
+fn force_discard_rank(s: &mut Session, rank: u8) {
+    draw_rank_next(s, rank);
+    let id = s.deck.pop().unwrap();
+    s.deck.extend(s.discard.drain(..));
+    s.discard.push(id);
+}
+
+fn special_test_bot(enabled: bool) -> PlannerBot {
+    PlannerBot::new(PlannerCfg {
+        budget_us: 0,
+        simulations: 256,
+        tree_depth: 1,
+        special_tactics: enabled,
+        confirmation_samples: 48,
+        ..PlannerCfg::default()
+    })
+}
+
+#[test]
+fn planner_can_deliberately_fail_cabo_to_reset_and_win() {
+    let mut s = scoring_fixture(
+        &[vec![5, 5, 0, 0], vec![2, 2, 3, 4], vec![1, 1, 1, 1]],
+        &[80, 90, 95],
+        &[false; 3],
+    );
+    force_discard_rank(&mut s, 11);
+    draw_rank_next(&mut s, 13);
+    // Put both 13s next: neither opponent can invoke an ability or improve via the discard.
+    let last = s.deck.pop().unwrap();
+    draw_rank_next(&mut s, 13);
+    s.deck.push(last);
+    let v = project(&s, Some(0), 0);
+    let improved = special_test_bot(true).analyze(&v, &mut StdRng::seed_from_u64(815));
+    let old = special_test_bot(false).analyze(&v, &mut StdRng::seed_from_u64(815));
+    assert_eq!(improved.command, Command::CallCabo);
+    assert_ne!(old.command, Command::CallCabo, "旧普通 Cabo 门槛应拒绝本例");
+    assert!(
+        improved
+            .candidates
+            .iter()
+            .find(|c| c.command == Command::CallCabo)
+            .unwrap()
+            .reset_probability
+            > 0.0
+    );
+    assert_eq!(
+        improved
+            .candidates
+            .iter()
+            .find(|c| c.command == Command::CallCabo)
+            .unwrap()
+            .cabo_success,
+        Some(0.0)
+    );
+    s.apply(0, &improved.command).unwrap();
+    for p in [1, 2] {
+        let action = ChallengerBot.decide(
+            &project(&s, Some(p), 0),
+            &mut StdRng::seed_from_u64(p as u64),
+        );
+        s.apply(p, &action).unwrap();
+        let action = ChallengerBot.decide(
+            &project(&s, Some(p), 0),
+            &mut StdRng::seed_from_u64(p as u64),
+        );
+        s.apply(p, &action).unwrap();
+    }
+    assert_eq!(s.phase, Phase::GameOver { winners: vec![0] });
+    assert_eq!(s.players[0].total_score, 50);
+    assert!(s.players[0].score_reset_this_round);
+}
+
+#[test]
+fn final_response_preserves_exact_reset_instead_of_lowering_hand_sum() {
+    let mut s = scoring_fixture(&[vec![1, 1], vec![5, 5, 5, 5]], &[60, 80], &[false; 2]);
+    s.cabo_caller = Some(0);
+    s.extra_turns.clear(); // 当前已经是最后一位加时玩家，队列只包含尚未行动者。
+    s.phase = Phase::Turn {
+        current: 1,
+        pending: None,
+    };
+    draw_rank_next(&mut s, 0);
+    s.apply(1, &Command::BeginDraw).unwrap();
+    let v = project(&s, Some(1), 0);
+    let cmd = special_test_bot(true).decide(&v, &mut StdRng::seed_from_u64(21));
+    assert_eq!(cmd, Command::DiscardDrawn { power: None });
+    s.apply(1, &cmd).unwrap();
+    assert_eq!(s.players[1].total_score, 50);
+    assert!(s.players[1].score_reset_used);
+}
+
+#[test]
+fn planner_completes_high_pairs_by_taking_a_higher_card() {
+    let mut s = scoring_fixture(&[vec![13, 13, 12, 5], vec![1, 1]], &[0, 0], &[false; 2]);
+    s.settings.target_score = 50;
+    s.cabo_caller = Some(1);
+    s.extra_turns.clear();
+    draw_rank_next(&mut s, 12);
+    s.apply(0, &Command::BeginDraw).unwrap();
+    let v = project(&s, Some(0), 0);
+    let report = special_test_bot(true).analyze(&v, &mut StdRng::seed_from_u64(51));
+    let cmd = report.command;
+    assert_eq!(cmd, Command::DrawSwap { slots: vec![3] });
+    assert_eq!(
+        report
+            .candidates
+            .iter()
+            .find(|c| c.command == cmd)
+            .unwrap()
+            .high_pairs_probability,
+        1.0
+    );
+    s.apply(0, &cmd).unwrap();
+    assert_eq!(s.phase, Phase::GameOver { winners: vec![0] });
+    assert_eq!(s.players[0].round_score, Some(0));
+    assert_eq!(s.players[1].round_score, Some(50));
+}
+
+#[test]
+fn planner_compresses_extra_high_cards_into_exactly_four_and_preserves_a_complete_combo() {
+    for ranks in [vec![13, 13, 12, 12, 12], vec![13, 13, 12, 12]] {
+        let mut s = scoring_fixture(&[ranks.clone(), vec![1, 1]], &[0, 0], &[false; 2]);
+        s.settings.target_score = 50;
+        s.cabo_caller = Some(1);
+        draw_rank_next(&mut s, if ranks.len() == 5 { 12 } else { 0 });
+        s.apply(0, &Command::BeginDraw).unwrap();
+        let cmd = special_test_bot(true)
+            .decide(&project(&s, Some(0), 0), &mut StdRng::seed_from_u64(119));
+        if ranks.len() == 5 {
+            assert!(
+                matches!(&cmd, Command::DrawSwap { slots } if slots.len() == 2 && slots.iter().all(|&i| i >= 2))
+            );
+        } else {
+            assert_eq!(cmd, Command::DiscardDrawn { power: None });
+        }
+        s.apply(0, &cmd).unwrap();
+        assert_eq!(s.phase, Phase::GameOver { winners: vec![0] });
+        assert_eq!(s.players[0].slots.len(), 4);
+        assert_eq!(s.players[0].round_score, Some(0));
+    }
+}
+
+#[test]
+fn planner_breaks_an_opponents_high_pairs_with_a_power() {
+    let mut s = scoring_fixture(
+        &[vec![5, 5, 5, 5], vec![12, 13, 12, 13]],
+        &[0, 0],
+        &[false; 2],
+    );
+    s.settings.target_score = 50;
+    s.cabo_caller = Some(1);
+    s.extra_turns.clear();
+    draw_rank_next(&mut s, 12);
+    s.apply(0, &Command::BeginDraw).unwrap();
+    let v = project(&s, Some(0), 0);
+    let cmd = special_test_bot(true).decide(&v, &mut StdRng::seed_from_u64(62));
+    assert!(matches!(
+        cmd,
+        Command::DiscardDrawn {
+            power: Some(PowerUse::Swap { player: 1, .. })
+        }
+    ));
+    s.apply(0, &cmd).unwrap();
+    assert_eq!(s.phase, Phase::GameOver { winners: vec![0] });
+    assert!(s.players[1].round_score.unwrap() >= 50);
+}
+
+#[test]
+fn special_calls_require_observable_opportunity_and_favorable_match_totals() {
+    let hands = [vec![12, 12, 13, 13], vec![1, 1], vec![2, 2]];
+    let s = scoring_fixture(&hands, &[80, 80, 0], &[false; 3]);
+    let mut state = exact_state(&s);
+    let info = policy::Info::new(&state, 0, true);
+    assert!(special::call_relevant(&state));
+    assert!(
+        !special::preferred_call(&state, &info),
+        "完整组合也不能覆盖大局已经输掉的事实"
+    );
+    state.cards[state.hands[0][0] as usize].revealed = false;
+    state.cards[state.hands[0][0] as usize].known = 0;
+    assert!(
+        !special::call_relevant(&state),
+        "不能读取自己的未知槽位确认组合"
+    );
+
+    let s = scoring_fixture(
+        &[vec![5, 5, 0, 0], vec![1, 1, 1, 1]],
+        &[80, 90],
+        &[true, false],
+    );
+    let state = exact_state(&s);
+    assert!(
+        !special::call_relevant(&state),
+        "已用资格不能再利用惩罚凑满分"
+    );
+}
+
 #[test]
 fn replacement_evidence_follows_the_replaced_slot() {
     let mut s = dealt(27, 3);
@@ -393,7 +601,10 @@ fn replacement_evidence_follows_the_replaced_slot() {
     let sampler = Sampler::new(&view, &mut StdRng::seed_from_u64(91), true).unwrap();
     let world = sampler.template;
     let weights = |slot: usize| world.cards[world.hands[p][slot] as usize].log_weights;
-    assert!(weights(1).iter().any(|&w| w != 0.0), "保留新牌的行动证据跟随新牌");
+    assert!(
+        weights(1).iter().any(|&w| w != 0.0),
+        "保留新牌的行动证据跟随新牌"
+    );
     assert_eq!(weights(2), [0.0; 14], "未选的未知牌不继承新牌证据");
     assert_eq!(weights(3), [0.0; 14]);
 }

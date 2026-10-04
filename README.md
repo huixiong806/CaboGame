@@ -1,21 +1,23 @@
 # CaboGame
 一个使用 Rust 和 HTMX 构建的多人在线 Cabo 卡牌游戏，可人机对战
 
-玩家访问网页即可创建/加入房间游玩，房主可以把任意座位切换成 AI。主分支只保留三种 AI。
+玩家访问网页即可创建/加入房间游玩，房主可以把任意座位切换成 AI。大厅提供 Easy、Normal、Hard 三种难度。
 
 ## 新版决策程序（v4）
 
-简短路线审计见 [AI_REBUILD.md](AI_REBUILD.md)，实现说明与实测见 [v4 验收记录](reports/V4_RESULTS.md)。新版已注册到房间下拉框：
+简短路线审计见 [AI_REBUILD.md](AI_REBUILD.md)，旧规则下的实现说明与实测见 [v4 验收记录](reports/V4_RESULTS.md)，新增策略见 [特殊规则 AI 验收记录](reports/SPECIAL_RULES_RESULTS.md)。当前难度分工见 [AI_DIFFICULTIES.md](AI_DIFFICULTIES.md)：
 
-- **信念规划 AI（v4）**：默认新增 AI。准确读取公共知识和弃牌记录；从公开行动推断暗牌；按玩家可观察信息共享搜索树；用新的配对样本复核搜索提案。默认每步最多约 300ms，不需要 Python/GPU/模型文件。
-- **主动战术 AI（陪练）**：独立的快速策略，会主动宣告、使用已知低牌和能力交换，也适合直接试玩。
-- **搜索 AI（原版）**：保留重建之前的搜索实现及默认策略网络，用作对照。
+- **Easy / 简单 AI**：原搜索实现及默认策略网络，保留为简单难度和对照。
+- **Normal / 普通 AI**：当前信念规划加特殊规则策略，默认新增 AI；能利用凑满分、完成/保护高牌双对、破坏对手组合。默认每步最多约 300ms，无需 Python/GPU/模型文件。作为普通难度候选，完成验收后固定版本。
+- **Hard / 困难 AI**：持续迭代的最强版本入口。目前沿用 Normal 的已验收策略，将搜索预算提高到约 600ms、模拟上限与独立复核样本加倍；更高预算本身不能证明棋力更强，后续通过独立对照验收晋升。
+
+`challenger` 陪练保留为离线评估对手，隐藏于大厅难度选单。
 
 旧简单 AI、旧战术 AI、v2 和无学习组件的独立入口，以及旧训练/实验工具，已归档到 [历史备份分支](https://github.com/huixiong806/CaboGame/tree/codex/archive-legacy-ai-20261004)。该分支保存清理前的源码、文本权重与报告；二进制训练数据只保留在本机。
 
 当前网页对局尚未持久化录制，也不会在线训练；离线评估结果不能替代真人对局验证。
 
-重新运行 `start.ps1` 后，在房间里选择上述 AI 即可。只想调整新版速度，可设置 `CABO_V4_BUDGET_US`（微秒）。
+已有服务在运行时，先执行 `.\start.ps1 -Stop`，再执行 `.\start.ps1` 构建新版，以免 Windows 锁定旧二进制。随后在房间里选择上述 AI 即可。调整 Normal 速度用 `CABO_V4_BUDGET_US`，Hard 用 `CABO_HARD_BUDGET_US`（均为微秒）。
 
 新的评估器严格检查命令合法性，让**一个候选对其余独立对手**，轮换所有座位。结果按种子组计算区间；`--blocks 20 --players 4` 是每个候选 80 局，不是 20 局。每局使用独立 Bot 实例，每个座位使用独立随机流；原始种子组数据可写到 TSV。
 
@@ -25,6 +27,9 @@ cargo run --release --bin cabo-eval -- --candidate v4 --compare search --opponen
 
 # 固定模拟次数，可复现且不受机器负载影响
 cargo run --release --bin cabo-eval -- --candidate v4 --compare challenger --opponents challenger --blocks 20 --cfg budget_us=0,simulations=512 --seed 81004
+
+# 特殊策略消融：两边仍使用完整新规则，仅对照是否主动利用特殊规则
+cargo run --release --bin cabo-eval -- --candidate normal --compare planner --opponents challenger --blocks 20 --players 4 --cfg budget_us=0,simulations=256 --compare-cfg budget_us=0,simulations=256,special_tactics=false --start-scores 80,90,95,70 --seed 91004
 
 # 消融：关闭后续树规划、公开行动推断或独立复核（分别测试，不混在一起）
 # --cfg budget_us=0,simulations=512,tree_depth=0
@@ -175,11 +180,11 @@ cargo run --release --bin cabo-sim -- --games 1000 --players 4 --seed 1
 
 | 大厅选项 | 命令行 ID | 用途 |
 |---|---|---|
-| 信念规划 AI（v4） | `planner`（别名 `v4`） | 默认选择，在线采样与树规划，默认每步上限约 300ms |
-| 主动战术 AI（陪练） | `challenger` | 快速策略，适合低延迟对局和评估对手 |
-| 搜索 AI（原版） | `search`（别名 `v3`） | 原 PIMC 搜索，保留默认学习组件作对照 |
+| 简单 AI（Easy） | `easy`（兼容 `search`、`v3`） | 原 PIMC 搜索及默认学习组件 |
+| 普通 AI（Normal） | `normal`（兼容 `planner`、`v4`） | 默认选择，信念规划与特殊规则策略，默认每步上限约 300ms |
+| 困难 AI（Hard） | `hard` | 当前规划策略采用更高预算，后续作为项目内最强版本的晋升入口，默认每步上限约 600ms |
 
-新版在目前的测试对手上显著优于原搜索版；尚未证明稳定强于陪练或真人。完整结果和局限见 [验收记录](reports/V4_RESULTS.md)。
+陪练 `challenger` 仍可在 CLI 和评估器中使用。旧规则下新版优于原搜索版的结果见 [旧验收记录](reports/V4_RESULTS.md)；新规则下的策略与测试需单独评估，不能沿用旧胜率或声称已稳定强于真人。
 
 原搜索版依赖的 `tactics`、`nn`、`policy`、`value` 和 `weights` 是内部组件，不是额外的 AI 选项。文本权重随源码编译，无需上传模型二进制。
 

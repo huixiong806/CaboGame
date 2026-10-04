@@ -18,7 +18,7 @@
         <div class="seat {% if o.is_current %}turn{% endif %} {% if o.is_caller %}caller{% endif %}">
           <div class="seat-head">
             <span class="pname">{{ o.name }}</span>
-            {% if o.is_ai %}<span class="tag ai">AI</span>{% endif %}
+            {% if o.is_ai %}<span class="tag ai">{{ o.ai_label() }}</span>{% endif %}
             {% if o.is_host %}<span class="tag host">房主</span>{% endif %}
             {% if o.is_caller %}<span class="tag cabo">CABO</span>{% endif %}
             <span class="pscore" title="累计得分">{{ o.total_score }}</span>

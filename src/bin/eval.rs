@@ -22,6 +22,7 @@ struct Args {
     seed: u64,
     jobs: usize,
     target: u32,
+    start_scores: Vec<u32>,
     out: Option<String>,
 }
 
@@ -48,12 +49,13 @@ fn args() -> Args {
         seed: 20261004,
         jobs: 4,
         target: 100,
+        start_scores: Vec::new(),
         out: None,
     };
     let mut it = std::env::args().skip(1);
     while let Some(key) = it.next() {
         if key == "--help" {
-            println!("cabo-eval --candidate v4 [--compare search] --opponents challenger --blocks 20 --players 4 --jobs 4 --seed 20261004 --cfg budget_us=0,simulations=256 [--compare-cfg ...] [--opponent-cfg ...]");
+            println!("cabo-eval --candidate normal [--compare easy] --opponents challenger --blocks 20 --players 4 --jobs 4 --seed 20261004 --cfg budget_us=0,simulations=256 [--compare-cfg ...] [--opponent-cfg ...] [--start-scores 80,90,95,70]");
             std::process::exit(0);
         }
         let v = it
@@ -71,6 +73,12 @@ fn args() -> Args {
             "--seed" => a.seed = v.parse().unwrap(),
             "--jobs" => a.jobs = v.parse().unwrap(),
             "--target" => a.target = v.parse().unwrap(),
+            "--start-scores" => {
+                a.start_scores = v
+                    .split(',')
+                    .map(|s| s.parse().expect("start score must be an integer"))
+                    .collect()
+            }
             "--out" => a.out = Some(v),
             _ => panic!("unknown argument: {key}"),
         }
@@ -82,6 +90,9 @@ fn args() -> Args {
             && a.target > 0
             && !a.opponents.is_empty()
             && a.opponents.iter().all(|s| !s.is_empty())
+            && (a.start_scores.is_empty()
+                || (a.start_scores.len() == a.players
+                    && a.start_scores.iter().all(|&s| s < a.target)))
     );
     a
 }
@@ -96,6 +107,8 @@ struct ResultRow {
     max_us: u64,
     calls: u64,
     successes: u64,
+    resets: u64,
+    high_pairs: u64,
 }
 impl ResultRow {
     fn add(&mut self, other: Self) {
@@ -107,6 +120,8 @@ impl ResultRow {
         self.max_us = self.max_us.max(other.max_us);
         self.calls += other.calls;
         self.successes += other.successes;
+        self.resets += other.resets;
+        self.high_pairs += other.high_pairs;
     }
 }
 
@@ -142,6 +157,9 @@ fn play(
         &vec!["eval"; a.players],
     );
     s.start_game().map_err(|e| e.to_string())?;
+    for (p, &total) in s.players.iter_mut().zip(&a.start_scores) {
+        p.total_score = total;
+    }
     // Separate decision random streams avoid coupling opponents to candidate RNG consumption.
     let mut rngs: Vec<StdRng> = (0..a.players)
         .map(|p| StdRng::seed_from_u64(seed ^ (p as u64 + 1).wrapping_mul(0xD1B54A32D192ED03)))
@@ -152,6 +170,7 @@ fn play(
             Phase::Peeking { done } => (0..a.players).find(|p| !done.contains_key(p)),
             Phase::Turn { current, .. } => Some(*current),
             Phase::RoundEnd => {
+                note_special_settlement(&s, seat, &mut row);
                 if s.cabo_caller == Some(seat) && s.players[seat].round_score == Some(0) {
                     row.successes += 1;
                 }
@@ -159,6 +178,7 @@ fn play(
                 continue;
             }
             Phase::GameOver { winners } => {
+                note_special_settlement(&s, seat, &mut row);
                 if s.cabo_caller == Some(seat) && s.players[seat].round_score == Some(0) {
                     row.successes += 1;
                 }
@@ -197,6 +217,16 @@ fn play(
     Err(format!("seed={seed} exceeded action limit"))
 }
 
+fn note_special_settlement(s: &cabo::game::Session, seat: usize, row: &mut ResultRow) {
+    row.resets += u64::from(s.players[seat].score_reset_this_round);
+    let hand: Vec<u8> = s.players[seat]
+        .slots
+        .iter()
+        .map(|&id| s.cards[id as usize].card.rank)
+        .collect();
+    row.high_pairs += u64::from(cabo::game::scoring::is_high_pairs(&hand));
+}
+
 fn summarize(label: &str, rows: &[ResultRow], seats: usize) {
     let n = rows.len() as f64;
     let mean = rows.iter().map(|r| r.gap / seats as f64).sum::<f64>() / n;
@@ -226,8 +256,8 @@ fn summarize(label: &str, rows: &[ResultRow], seats: usize) {
     for &r in rows {
         totals.add(r);
     }
-    println!("{label}: games={} win_share={:.1}% (descriptive 95% block interval {:.1}..{:.1}%); score_gap={:+.2} +/- {:.2} (95% block t CI); decision_mean={:.2}ms max={:.2}ms Cabo={}/{}",
-        rows.len()*seats,100.0*win,100.0*lo,100.0*hi,mean,t*se,totals.decision_us as f64/totals.decisions.max(1) as f64/1000.0,totals.max_us as f64/1000.0,totals.successes,totals.calls);
+    println!("{label}: games={} win_share={:.1}% (descriptive 95% block interval {:.1}..{:.1}%); score_gap={:+.2} +/- {:.2} (95% block t CI); decision_mean={:.2}ms max={:.2}ms Cabo0={}/{} resets={} high_pairs={}",
+        rows.len()*seats,100.0*win,100.0*lo,100.0*hi,mean,t*se,totals.decision_us as f64/totals.decisions.max(1) as f64/1000.0,totals.max_us as f64/1000.0,totals.successes,totals.calls,totals.resets,totals.high_pairs);
 }
 
 fn critical_t(blocks: usize) -> f64 {
@@ -323,7 +353,7 @@ fn main() {
     let mut result = results.into_inner().unwrap();
     result.sort_by_key(|r| r.0);
     if let Some(out) = &a.out {
-        let mut text=format!("# {:?}\nblock\tseed\tbot\tgames\tmean_gap\twin_share\tdecisions\tdecision_us\tmax_us\tcalls\tsuccesses\n",a);
+        let mut text=format!("# {:?}\nblock\tseed\tbot\tgames\tmean_gap\twin_share\tdecisions\tdecision_us\tmax_us\tcalls\tsuccesses\tresets\thigh_pairs\n",a);
         for (i, row, other) in &result {
             let seed = a
                 .seed
@@ -332,7 +362,7 @@ fn main() {
                 std::iter::once((&a.candidate, row)).chain(a.compare.as_ref().map(|id| (id, other)))
             {
                 text.push_str(&format!(
-                    "{i}\t{seed}\t{name}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                    "{i}\t{seed}\t{name}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
                     a.players,
                     r.gap / a.players as f64,
                     r.win / a.players as f64,
@@ -340,7 +370,9 @@ fn main() {
                     r.decision_us,
                     r.max_us,
                     r.calls,
-                    r.successes
+                    r.successes,
+                    r.resets,
+                    r.high_pairs
                 ));
             }
         }

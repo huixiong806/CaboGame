@@ -55,6 +55,8 @@ pub(super) struct State {
     pub totals: Vec<u32>,
     pub round_scores: Vec<u32>,
     pub score_reset_used: Vec<bool>,
+    /// Strategy ablation only; settlement rules are always enabled.
+    pub special_tactics: bool,
     pub actor: usize,
     pub stage: Stage,
     pub caller: Option<usize>,
@@ -283,7 +285,11 @@ impl State {
             .map(|h| h.iter().map(|&id| self.cards[id as usize].rank).collect())
             .collect();
         let result = crate::game::scoring::settle(
-            &hands, &self.totals, &self.score_reset_used, self.caller, self.penalty,
+            &hands,
+            &self.totals,
+            &self.score_reset_used,
+            self.caller,
+            self.penalty,
         );
         self.round_scores = result.scores;
         self.totals = result.totals;
@@ -298,20 +304,23 @@ impl State {
     }
 
     pub fn utility(&self, me: usize) -> f64 {
-        let max = *self.totals.iter().max().unwrap();
+        self.utility_for(&self.totals, me)
+    }
+
+    pub fn utility_for(&self, totals: &[u32], me: usize) -> f64 {
+        let max = *totals.iter().max().unwrap();
         if max >= self.target {
-            let min = *self.totals.iter().min().unwrap();
-            return if self.totals[me] == min {
-                1.0 / self.totals.iter().filter(|&&t| t == min).count() as f64
+            let min = *totals.iter().min().unwrap();
+            return if totals[me] == min {
+                1.0 / totals.iter().filter(|&&t| t == min).count() as f64
             } else {
                 0.0
             };
         }
         // Approximate future-round uncertainty. Multiseat normalization: equal totals => 1/n.
         let temp = (8.0 * ((self.target - max) as f64 / 8.0).sqrt()).max(6.0);
-        let min = *self.totals.iter().min().unwrap() as f64;
-        let weights: Vec<f64> = self
-            .totals
+        let min = *totals.iter().min().unwrap() as f64;
+        let weights: Vec<f64> = totals
             .iter()
             .map(|&s| (-(s as f64 - min) / temp).exp())
             .collect();

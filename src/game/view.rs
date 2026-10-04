@@ -109,6 +109,7 @@ pub struct SeatView {
     pub id: PlayerId,
     pub name: String,
     pub is_ai: bool,
+    pub bot_id: String,
     pub is_host: bool,
     pub vacant: bool,
     pub slots: Vec<SlotView>,
@@ -123,11 +124,22 @@ pub struct SeatView {
 }
 
 impl SeatView {
+    pub fn ai_label(&self) -> &'static str { bot_label(&self.bot_id) }
     pub fn round_score_text(&self) -> String {
         self.round_score.map(|s| s.to_string()).unwrap_or_else(|| "—".into())
     }
     pub fn reset_label(&self) -> &'static str {
         if self.score_reset_used { "重置已用" } else { "重置可用" }
+    }
+}
+
+pub fn bot_label(id: &str) -> &'static str {
+    match id {
+        "easy" | "search" | "v3" => "Easy",
+        "normal" | "planner" | "v4" => "Normal",
+        "hard" => "Hard",
+        "challenger" => "陪练",
+        _ => "AI",
     }
 }
 
@@ -411,6 +423,7 @@ pub fn project(session: &Session, viewer: Option<PlayerId>, host: PlayerId) -> P
         id: pid,
         name: names[pid].clone(),
         is_ai: session.players[pid].is_ai,
+        bot_id: session.players[pid].bot_id.clone(),
         is_host: pid == host,
         vacant: !session.players[pid].is_ai && session.players[pid].token.is_none(),
         slots: (0..session.players[pid].slots.len() as SlotId)

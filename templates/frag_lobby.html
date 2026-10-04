@@ -12,7 +12,7 @@
     <div class="seat-row {% if p.is_me %}me{% endif %}">
       <span class="seat-idx">P{{ p.id + 1 }}</span>
       <span class="seat-name">{{ p.name }}</span>
-      {% if p.is_ai %}<span class="tag ai">AI</span>{% endif %}
+      {% if p.is_ai %}<span class="tag ai">{{ p.ai_label() }}</span>{% endif %}
       {% if p.is_host %}<span class="tag host">房主</span>{% endif %}
       {% if p.vacant %}<span class="tag vacant">空位</span>{% endif %}
       {% if is_host %}

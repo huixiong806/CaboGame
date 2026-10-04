@@ -11,6 +11,18 @@ use cabo::game::Settings;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 
+#[test]
+fn difficulty_registry_has_three_choices_and_preserves_legacy_room_ids() {
+    let registry = BotRegistry::with_builtins();
+    assert_eq!(registry.list().iter().map(|b| b.0).collect::<Vec<_>>(), ["normal", "hard", "easy"]);
+    assert_eq!(registry.default_id(), "normal");
+    assert_eq!(registry.get("planner").unwrap().id(), "normal");
+    assert_eq!(registry.get("search").unwrap().id(), "easy");
+    for id in ["normal", "hard", "easy", "planner", "v4", "search", "v3", "challenger"] {
+        assert!(cabo::ai::build_bot(id, &[]).is_some());
+    }
+}
+
 /// 每个注册的 Bot 都能在 2/3/4 人局里打完一整局，不出非法命令、不卡死。
 ///
 /// 为了让 `cargo test` 保持快速，这里把搜索型 Bot 的预算压到 1ms

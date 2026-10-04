@@ -106,6 +106,18 @@ impl Info {
             .sum()
     }
 
+    pub(super) fn p_lowest_at(&self, me: usize, sum: u32) -> f64 {
+        (0..self.values.len())
+            .filter(|&p| p != me)
+            .map(|p| {
+                self.sum_distribution(p)
+                    .iter()
+                    .skip(sum as usize + 1)
+                    .sum::<f64>()
+            })
+            .product()
+    }
+
     fn match_probability(&self, me: usize, slots: &[u8]) -> f64 {
         (0..14)
             .map(|r| {
@@ -234,6 +246,10 @@ pub(super) fn candidates(s: &State, info: &Info) -> Vec<Action> {
 
 /// Score uses means of distributions, never the hidden card rank stored in the simulation.
 pub(super) fn score(s: &State, info: &Info, action: &Action) -> f64 {
+    ordinary_score(s, info, action) + super::special::bonus(s, info, action)
+}
+
+fn ordinary_score(s: &State, info: &Info, action: &Action) -> f64 {
     let me = s.actor;
     let future = s.caller.is_none() && s.deck.len() > 1;
     let threat = |p: usize| {
@@ -380,6 +396,9 @@ pub(super) fn ranked(s: &State, max_actions: usize) -> Vec<(Action, f64)> {
 /// Each simulation samples a style per seat, held fixed throughout the round.
 pub(super) fn choose(s: &State, style: u8) -> Action {
     let info = Info::new(s, s.actor, s.caller.is_none() && s.stage == Stage::Idle);
+    if style != 3 && super::special::preferred_call(s, &info) {
+        return Action::Cabo;
+    }
     let threshold = match style {
         0 => 0.70,
         1 => 0.82,

@@ -2,6 +2,7 @@
 //! The bot accepts only PlayerView; tree keys contain no unobserved ranks.
 mod policy;
 mod posterior;
+mod special;
 mod state;
 #[cfg(test)]
 mod tests;
@@ -25,6 +26,8 @@ pub struct PlannerCfg {
     pub max_actions: usize,
     pub exploration: f64,
     pub use_evidence: bool,
+    /// Disable for comparison against the pre-special-tactics strategy. Rules remain active.
+    pub special_tactics: bool,
     /// Search-proposed calls need this estimated strict-lowest rate after final responses.
     pub min_cabo_success: f64,
     /// Independent paired confirmation against the fast incumbent avoids selection noise.
@@ -46,6 +49,7 @@ impl Default for PlannerCfg {
             max_actions: 64,
             exploration: 0.10,
             use_evidence: true,
+            special_tactics: true,
             min_cabo_success: 0.75,
             confirmation_samples: 48,
             confirmation_t: 1.64,
@@ -55,6 +59,19 @@ impl Default for PlannerCfg {
 }
 
 impl PlannerCfg {
+    /// Current Hard starts from the same validated policy with twice the search budget.
+    /// Future changes are promoted here only after comparison with the Normal baseline.
+    pub fn hard() -> Self {
+        Self {
+            budget_us: std::env::var("CABO_HARD_BUDGET_US")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(600_000),
+            simulations: 8192,
+            confirmation_samples: 96,
+            ..Self::default()
+        }
+    }
     pub fn set(&mut self, key: &str, value: &str) -> bool {
         match key {
             "budget_us" => value.parse().ok().map(|v| self.budget_us = v),
@@ -88,6 +105,11 @@ impl PlannerCfg {
                 "false" | "0" => Some(self.use_evidence = false),
                 _ => None,
             },
+            "special_tactics" => match value {
+                "true" | "1" => Some(self.special_tactics = true),
+                "false" | "0" => Some(self.special_tactics = false),
+                _ => None,
+            },
             "min_cabo_success" => value
                 .parse::<f64>()
                 .ok()
@@ -114,6 +136,8 @@ struct Edge {
     sum: f64,
     prior: f64,
     cabo_ok: u32,
+    resets: u32,
+    high_pairs: u32,
 }
 struct Node {
     visits: u32,
@@ -132,6 +156,8 @@ impl Node {
                     visits: 0,
                     sum: 0.0,
                     cabo_ok: 0,
+                    resets: 0,
+                    high_pairs: 0,
                     prior: (prior_base + score.clamp(-30.0, 30.0) / 100.0).clamp(0.0, 1.0),
                 })
                 .collect(),
@@ -168,6 +194,8 @@ pub struct CandidateReport {
     pub visits: u32,
     pub mean: f64,
     pub cabo_success: Option<f64>,
+    pub reset_probability: f64,
+    pub high_pairs_probability: f64,
 }
 
 #[derive(Clone, Debug)]
@@ -214,6 +242,8 @@ impl PlannerBot {
             return report;
         };
         report.belief_ok = true;
+        sampler.template.special_tactics = self.cfg.special_tactics;
+        let special_call = special::call_relevant(&sampler.template);
         let root_key = sampler.template.observation_key(me);
         let incumbent = policy::choose(&sampler.template, 1);
         let tree_budget = if self.cfg.confirmation_samples > 0 {
@@ -296,12 +326,21 @@ impl PlannerBot {
                 .min()
                 .unwrap();
             let call_ok = own_sum < other_min;
+            let reset = s.score_reset_used[me] && !sampler.template.score_reset_used[me];
+            let high_pairs = crate::game::scoring::is_high_pairs(
+                &s.hands[me]
+                    .iter()
+                    .map(|&id| s.cards[id as usize].rank)
+                    .collect::<Vec<_>>(),
+            );
             for &(ni, ei) in &path {
                 let node = &mut tree[ni];
                 node.visits += 1;
                 let edge = &mut node.edges[ei];
                 edge.visits += 1;
                 edge.sum += reward;
+                edge.resets += u32::from(reset);
+                edge.high_pairs += u32::from(high_pairs);
                 if matches!(edge.action, Action::Cabo) && call_ok {
                     edge.cabo_ok += 1;
                 }
@@ -317,7 +356,8 @@ impl PlannerBot {
             .filter(|e| {
                 !matches!(e.action, Action::Cabo)
                     || (e.visits >= 16
-                        && e.cabo_ok as f64 / e.visits as f64 >= self.cfg.min_cabo_success)
+                        && (special_call
+                            || e.cabo_ok as f64 / e.visits as f64 >= self.cfg.min_cabo_success))
             })
             .max_by(|a, b| {
                 a.visits.cmp(&b.visits).then_with(|| {
@@ -333,6 +373,7 @@ impl PlannerBot {
             // the challenger. Both branches share the exact world and the same opponent styles.
             chosen = incumbent.clone();
             if let Some(mut confirm) = Sampler::new(view, rng, self.cfg.use_evidence) {
+                confirm.template.special_tactics = self.cfg.special_tactics;
                 let mut sum = 0.0;
                 let mut sq = 0.0;
                 for _ in 0..self.cfg.confirmation_samples {
@@ -417,6 +458,8 @@ impl PlannerBot {
                 } else {
                     None
                 },
+                reset_probability: e.resets as f64 / e.visits.max(1) as f64,
+                high_pairs_probability: e.high_pairs as f64 / e.visits.max(1) as f64,
             })
             .collect();
         report.nodes = tree.len();

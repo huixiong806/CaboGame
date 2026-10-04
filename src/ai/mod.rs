@@ -65,18 +65,24 @@ impl Default for BotRegistry {
 
 /// 按 id 构造 Bot，`cfg` 是 `key=value` 形式的参数覆盖（调参 / 擂台用）。
 ///
-/// 可用 id：`planner`/`v4`、`challenger`、`search`/`v3`。
+/// 难度入口：`easy`、`normal`、`hard`；兼容 `planner`/`v4`、`search`/`v3`。
+/// `challenger` 是评估用陪练，不出现在房间难度选单。
 /// 历史版本见备份分支 `codex/archive-legacy-ai-20261004`。
 pub fn build_bot(id: &str, cfg: &[(String, String)]) -> Option<Arc<dyn Bot>> {
-    if matches!(id, "planner" | "v4" | "challenger") {
-        let mut p = planner::PlannerCfg::default();
+    if matches!(id, "planner" | "v4" | "challenger" | "normal" | "hard") {
+        let mut p = if id == "hard" { planner::PlannerCfg::hard() } else { planner::PlannerCfg::default() };
         for (key, value) in cfg {
             if !p.set(key, value) { return None; }
         }
-        return Some(if id == "challenger" { Arc::new(planner::ChallengerBot) }
-            else { Arc::new(planner::PlannerBot::new(p)) });
+        let inner: Arc<dyn Bot> = if id == "challenger" { Arc::new(planner::ChallengerBot) }
+            else { Arc::new(planner::PlannerBot::new(p)) };
+        return Some(match id {
+            "normal" => Arc::new(AliasBot { inner, id: "normal", name: "普通 AI（Normal）" }),
+            "hard" => Arc::new(AliasBot { inner, id: "hard", name: "困难 AI（Hard）" }),
+            _ => inner,
+        });
     }
-    if !matches!(id, "search" | "v3") {
+    if !matches!(id, "search" | "v3" | "easy") {
         return None;
     }
     let mut search_cfg = search::SearchCfg::default();
@@ -89,7 +95,8 @@ pub fn build_bot(id: &str, cfg: &[(String, String)]) -> Option<Arc<dyn Bot>> {
         }
     }
     search_cfg.policy = policy_cfg;
-    Some(Arc::new(search::SearchBot::new(search_cfg)))
+    let inner: Arc<dyn Bot> = Arc::new(search::SearchBot::new(search_cfg));
+    Some(if id == "easy" { Arc::new(AliasBot { inner, id: "easy", name: "简单 AI（Easy）" }) } else { inner })
 }
 
 impl BotRegistry {
@@ -98,12 +105,13 @@ impl BotRegistry {
         BotRegistry { bots: Vec::new() }
     }
 
-    /// 默认注册表：只保留新版规划、快速陪练和原搜索版。
+    /// 房间难度入口；保留陪练供离线评估与旧房间使用。
     pub fn with_builtins() -> Self {
         let mut reg = BotRegistry { bots: Vec::new() };
-        reg.register(Arc::new(planner::PlannerBot::new(planner::PlannerCfg::default())));
+        for id in ["normal", "hard", "easy"] {
+            reg.register(build_bot(id, &[]).expect("内置难度必须可构造"));
+        }
         reg.register(Arc::new(planner::ChallengerBot));
-        reg.register(Arc::new(search::SearchBot::new(search::SearchCfg::default())));
         reg
     }
 
@@ -113,17 +121,20 @@ impl BotRegistry {
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<dyn Bot>> {
-        self.bots.iter().find(|b| b.id() == id).cloned()
+        self.bots.iter().find(|b| b.id() == id).cloned().or_else(|| {
+            let alias = match id { "planner" | "v4" => "normal", "search" | "v3" => "easy", _ => return None };
+            self.bots.iter().find(|b| b.id() == alias).cloned()
+        })
     }
 
     /// 默认 Bot id（新 AI 座位使用）。
     pub fn default_id(&self) -> &'static str {
-        self.bots.first().map(|b| b.id()).unwrap_or("planner")
+        self.bots.first().map(|b| b.id()).unwrap_or("normal")
     }
 
     /// (id, 展示名) 列表，供房间前端下拉选择。
     pub fn list(&self) -> Vec<(&'static str, &'static str)> {
-        self.bots.iter().map(|b| (b.id(), b.name())).collect()
+        self.bots.iter().filter(|b| b.id() != "challenger").map(|b| (b.id(), b.name())).collect()
     }
 }
 
