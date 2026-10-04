@@ -246,7 +246,9 @@ pub(super) fn candidates(s: &State, info: &Info) -> Vec<Action> {
 
 /// Score uses means of distributions, never the hidden card rank stored in the simulation.
 pub(super) fn score(s: &State, info: &Info, action: &Action) -> f64 {
-    ordinary_score(s, info, action) + super::special::bonus(s, info, action)
+    ordinary_score(s, info, action)
+        + super::special::bonus(s, info, action)
+        + super::special::uncertain_reset_bonus(s, info, action)
 }
 
 fn ordinary_score(s: &State, info: &Info, action: &Action) -> f64 {

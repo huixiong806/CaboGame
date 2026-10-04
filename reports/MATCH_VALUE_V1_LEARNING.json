@@ -1,0 +1,66 @@
+{
+  "architecture": "Deep Sets 7-32-32, pooled 64-32-1 + frozen softmax residual",
+  "parameters": 3425,
+  "training_seed": 2718,
+  "selected_epoch": 28,
+  "train": {
+    "matches": 18000,
+    "rows": 81241,
+    "baseline": {
+      "cross_entropy": 0.7297276410859717,
+      "brier": 0.3974997214481512
+    },
+    "network": {
+      "cross_entropy": 0.6653174241882492,
+      "brier": 0.38353090332122125
+    },
+    "cross_entropy_paired_delta": {
+      "mean": -0.06441021721683912,
+      "ci95": 0.0049160737148138895
+    },
+    "brier_paired_delta": {
+      "mean": -0.0139688182053714,
+      "ci95": 0.0014356000033069153
+    }
+  },
+  "validation": {
+    "matches": 4000,
+    "rows": 18091,
+    "baseline": {
+      "cross_entropy": 0.7189340235940282,
+      "brier": 0.39781655390587695
+    },
+    "network": {
+      "cross_entropy": 0.6609008266529668,
+      "brier": 0.3822923435182231
+    },
+    "cross_entropy_paired_delta": {
+      "mean": -0.05803319658123565,
+      "ci95": 0.009005042958045448
+    },
+    "brier_paired_delta": {
+      "mean": -0.015524210326922066,
+      "ci95": 0.003100214263991143
+    }
+  },
+  "test": {
+    "matches": 4000,
+    "rows": 18193,
+    "baseline": {
+      "cross_entropy": 0.7369609996572496,
+      "brier": 0.40301808341998774
+    },
+    "network": {
+      "cross_entropy": 0.6701386126613106,
+      "brier": 0.3877029577468737
+    },
+    "cross_entropy_paired_delta": {
+      "mean": -0.06682238723305213,
+      "ci95": 0.010235243897433027
+    },
+    "brier_paired_delta": {
+      "mean": -0.015315125743324325,
+      "ci95": 0.002964648320461581
+    }
+  }
+}

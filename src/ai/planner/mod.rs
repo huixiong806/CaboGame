@@ -1,7 +1,9 @@
 //! Single-observer information-set planning against a mixture of opponent models.
 //! The bot accepts only PlayerView; tree keys contain no unobserved ranks.
+mod match_value;
 mod policy;
 mod posterior;
+mod racing;
 mod special;
 mod state;
 #[cfg(test)]
@@ -16,8 +18,50 @@ use state::{Action, Stage, State};
 use std::collections::HashMap;
 use std::time::Instant;
 
+fn repeated_public_cycle(view: &PlayerView) -> bool {
+    if !matches!(view.panel, Panel::Idle { can_draw: true, .. }) {
+        return false;
+    }
+    let n = view.all_seats.len();
+    let events = &view.public_events;
+    // At most n selected cards plus the discard can rotate. Require two identical
+    // full cycles, including public ranks and selected slots, after information settled.
+    (1..=n + 1).any(|turns| {
+        let period = n * turns;
+        if period == 0 || events.len() < 2 * period {
+            return false;
+        }
+        let tail = &events[events.len() - 2 * period..];
+        tail[..period] == tail[period..]
+            && tail.iter().all(|e| matches!(e, crate::game::PublicEvent::Exchange {
+                source: crate::game::Pile::Discard, slots, exposed, incoming: Some(_), success: true, ..
+            } if slots.len() == 1 && exposed.len() == 1))
+    })
+}
+
 #[derive(Clone, Debug)]
 pub struct PlannerCfg {
+    /// Break an observed, repeated public discard-exchange cycle by drawing.
+    pub avoid_cycles: bool,
+    /// Offline research only. Defaults never read a local model or change Normal's utility.
+    pub learned_value: bool,
+    /// CABOMV01 model; required when learned_value is explicitly enabled.
+    pub value_model_path: String,
+    /// Hard-only paired root racing; false preserves the frozen Normal planner.
+    pub root_racing: bool,
+    /// Evidence for voluntarily keeping a draw after replacing an unseen single card.
+    pub blind_keep_evidence: bool,
+    pub racing_actions: usize,
+    /// Rejected development ablation, retained for reproducible comparisons.
+    pub probabilistic_reset: bool,
+    /// Soft likelihoods for voluntary power trades and discards.
+    pub behavioral_evidence: bool,
+    /// Permit a call that reliably wins the whole match even when the hand is not lowest.
+    pub match_cabo: bool,
+    /// Soft likelihood for an opponent's public Cabo declaration.
+    pub call_evidence: bool,
+    /// Ordinary incumbent calls must pass the same post-response check as search calls.
+    pub validate_calls: bool,
     /// 0 => deterministic simulation count, otherwise a wall-clock limit.
     pub budget_us: u64,
     pub simulations: u32,
@@ -40,6 +84,17 @@ pub struct PlannerCfg {
 impl Default for PlannerCfg {
     fn default() -> Self {
         Self {
+            avoid_cycles: false,
+            learned_value: false,
+            value_model_path: "data/match_value/model-v1.bin".into(),
+            root_racing: false,
+            blind_keep_evidence: false,
+            racing_actions: 12,
+            probabilistic_reset: false,
+            behavioral_evidence: false,
+            match_cabo: false,
+            call_evidence: false,
+            validate_calls: false,
             budget_us: std::env::var("CABO_V4_BUDGET_US")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -59,10 +114,15 @@ impl Default for PlannerCfg {
 }
 
 impl PlannerCfg {
-    /// Current Hard starts from the same validated policy with twice the search budget.
-    /// Future changes are promoted here only after comparison with the Normal baseline.
+    /// Normal remains frozen; only independently validated changes are promoted here.
     pub fn hard() -> Self {
-        Self {
+        Self::hard_with_model(std::env::var("CABO_HARD_VALUE_MODEL").ok())
+    }
+
+    fn hard_with_model(model: Option<String>) -> Self {
+        let mut cfg = Self {
+            avoid_cycles: true,
+            root_racing: false,
             budget_us: std::env::var("CABO_HARD_BUDGET_US")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -70,10 +130,72 @@ impl PlannerCfg {
             simulations: 8192,
             confirmation_samples: 96,
             ..Self::default()
+        };
+        // Explicit local opt-in: training artifacts are never bundled in Git.
+        if let Some(path) = model.filter(|p| !p.trim().is_empty()) {
+            cfg.learned_value = true;
+            cfg.value_model_path = path;
+            cfg.validate_calls = true;
+            cfg.min_cabo_success = 0.0;
         }
+        cfg
     }
     pub fn set(&mut self, key: &str, value: &str) -> bool {
         match key {
+            "avoid_cycles" => match value {
+                "true" | "1" => Some(self.avoid_cycles = true),
+                "false" | "0" => Some(self.avoid_cycles = false),
+                _ => None,
+            },
+            "value_model_path" => {
+                self.value_model_path = value.to_string();
+                Some(())
+            }
+            "learned_value" => match value {
+                "true" | "1" => Some(self.learned_value = true),
+                "false" | "0" => Some(self.learned_value = false),
+                _ => None,
+            },
+            "validate_calls" => match value {
+                "true" | "1" => Some(self.validate_calls = true),
+                "false" | "0" => Some(self.validate_calls = false),
+                _ => None,
+            },
+            "call_evidence" => match value {
+                "true" | "1" => Some(self.call_evidence = true),
+                "false" | "0" => Some(self.call_evidence = false),
+                _ => None,
+            },
+            "match_cabo" => match value {
+                "true" | "1" => Some(self.match_cabo = true),
+                "false" | "0" => Some(self.match_cabo = false),
+                _ => None,
+            },
+            "behavioral_evidence" => match value {
+                "true" | "1" => Some(self.behavioral_evidence = true),
+                "false" | "0" => Some(self.behavioral_evidence = false),
+                _ => None,
+            },
+            "probabilistic_reset" => match value {
+                "true" | "1" => Some(self.probabilistic_reset = true),
+                "false" | "0" => Some(self.probabilistic_reset = false),
+                _ => None,
+            },
+            "racing_actions" => value
+                .parse::<usize>()
+                .ok()
+                .filter(|&v| (2..=64).contains(&v))
+                .map(|v| self.racing_actions = v),
+            "blind_keep_evidence" => match value {
+                "true" | "1" => Some(self.blind_keep_evidence = true),
+                "false" | "0" => Some(self.blind_keep_evidence = false),
+                _ => None,
+            },
+            "root_racing" => match value {
+                "true" | "1" => Some(self.root_racing = true),
+                "false" | "0" => Some(self.root_racing = false),
+                _ => None,
+            },
             "budget_us" => value.parse().ok().map(|v| self.budget_us = v),
             "simulations" | "worlds" => value
                 .parse::<u32>()
@@ -138,6 +260,7 @@ struct Edge {
     cabo_ok: u32,
     resets: u32,
     high_pairs: u32,
+    match_wins: u32,
 }
 struct Node {
     visits: u32,
@@ -158,6 +281,7 @@ impl Node {
                     cabo_ok: 0,
                     resets: 0,
                     high_pairs: 0,
+                    match_wins: 0,
                     prior: (prior_base + score.clamp(-30.0, 30.0) / 100.0).clamp(0.0, 1.0),
                 })
                 .collect(),
@@ -186,6 +310,7 @@ impl Node {
 
 pub struct PlannerBot {
     pub cfg: PlannerCfg,
+    value_model: Option<std::sync::Arc<match_value::MatchValue>>,
 }
 
 #[derive(Clone, Debug)]
@@ -213,7 +338,18 @@ pub struct DecisionReport {
 
 impl PlannerBot {
     pub fn new(cfg: PlannerCfg) -> Self {
-        Self { cfg }
+        Self::try_new(cfg).expect("invalid planner model configuration")
+    }
+
+    pub fn try_new(cfg: PlannerCfg) -> Result<Self, String> {
+        let value_model = if cfg.learned_value {
+            Some(match_value::MatchValue::load(std::path::Path::new(
+                &cfg.value_model_path,
+            ))?)
+        } else {
+            None
+        };
+        Ok(Self { cfg, value_model })
     }
 
     pub fn analyze(&self, view: &PlayerView, rng: &mut dyn RngCore) -> DecisionReport {
@@ -238,14 +374,47 @@ impl PlannerBot {
             return report;
         }
         let Some(me) = view.me else { return report };
-        let Some(mut sampler) = Sampler::new(view, rng, self.cfg.use_evidence) else {
+        if self.cfg.avoid_cycles && repeated_public_cycle(view) {
+            report.command = Command::BeginDraw;
+            report.elapsed_us = start.elapsed().as_micros() as u64;
+            return report;
+        }
+        if self.cfg.root_racing {
+            return racing::analyze(
+                view,
+                rng,
+                &self.cfg,
+                self.value_model.clone(),
+                start,
+                report,
+            );
+        }
+        let Some(mut sampler) = Sampler::configured(
+            view,
+            rng,
+            self.cfg.use_evidence,
+            self.cfg.blind_keep_evidence,
+            self.cfg.behavioral_evidence,
+            self.cfg.call_evidence,
+        ) else {
             return report;
         };
         report.belief_ok = true;
         sampler.template.special_tactics = self.cfg.special_tactics;
+        sampler.template.value_model = self.value_model.clone();
+        sampler.template.reset_policy_player = self.cfg.probabilistic_reset.then_some(me);
         let special_call = special::call_relevant(&sampler.template);
         let root_key = sampler.template.observation_key(me);
-        let incumbent = policy::choose(&sampler.template, 1);
+        let fast = policy::choose(&sampler.template, 1);
+        let incumbent = if self.cfg.validate_calls
+            && matches!(fast, Action::Cabo)
+            && !special_call
+            && !sampler.template.deck.is_empty()
+        {
+            Action::Draw
+        } else {
+            fast
+        };
         let tree_budget = if self.cfg.confirmation_samples > 0 {
             self.cfg.budget_us * 2 / 3
         } else {
@@ -311,6 +480,7 @@ impl PlannerBot {
                 break;
             }
             let reward = s.utility(me);
+            let match_win = *s.totals.iter().max().unwrap() >= s.target && reward > 0.0;
             let own_sum: u32 = s.hands[me]
                 .iter()
                 .map(|&id| s.cards[id as usize].rank as u32)
@@ -341,6 +511,7 @@ impl PlannerBot {
                 edge.sum += reward;
                 edge.resets += u32::from(reset);
                 edge.high_pairs += u32::from(high_pairs);
+                edge.match_wins += u32::from(match_win);
                 if matches!(edge.action, Action::Cabo) && call_ok {
                     edge.cabo_ok += 1;
                 }
@@ -357,6 +528,8 @@ impl PlannerBot {
                 !matches!(e.action, Action::Cabo)
                     || (e.visits >= 16
                         && (special_call
+                            || (self.cfg.match_cabo
+                                && e.match_wins as f64 / e.visits as f64 >= 0.65)
                             || e.cabo_ok as f64 / e.visits as f64 >= self.cfg.min_cabo_success))
             })
             .max_by(|a, b| {
@@ -372,8 +545,17 @@ impl PlannerBot {
             // A fresh chain and fresh worlds: evaluation data are not the samples used to pick
             // the challenger. Both branches share the exact world and the same opponent styles.
             chosen = incumbent.clone();
-            if let Some(mut confirm) = Sampler::new(view, rng, self.cfg.use_evidence) {
+            if let Some(mut confirm) = Sampler::configured(
+                view,
+                rng,
+                self.cfg.use_evidence,
+                self.cfg.blind_keep_evidence,
+                self.cfg.behavioral_evidence,
+                self.cfg.call_evidence,
+            ) {
                 confirm.template.special_tactics = self.cfg.special_tactics;
+                confirm.template.value_model = self.value_model.clone();
+                confirm.template.reset_policy_player = self.cfg.probabilistic_reset.then_some(me);
                 let mut sum = 0.0;
                 let mut sq = 0.0;
                 for _ in 0..self.cfg.confirmation_samples {
@@ -497,6 +679,27 @@ impl Bot for PlannerBot {
 
 /// Independent fast sparring bot, with accurate public memory and proactive calls.
 pub struct ChallengerBot;
+/// Offline training roster. The registered Challenger continues to use style 1.
+pub struct StyledChallengerBot(pub u8);
+impl Bot for StyledChallengerBot {
+    fn id(&self) -> &'static str {
+        "styled-challenger"
+    }
+    fn name(&self) -> &'static str {
+        "训练陪练"
+    }
+    fn decide(&self, view: &PlayerView, rng: &mut dyn RngCore) -> Command {
+        if matches!(view.panel, Panel::PeekPick { .. }) {
+            return Command::PeekInitial { slots: [0, 1] };
+        }
+        if matches!(view.panel, Panel::ConfirmCabo) {
+            return Command::CallCabo;
+        }
+        Sampler::new(view, rng, false)
+            .map(|s| policy::choose(&s.template, self.0.min(2)).command())
+            .unwrap_or_else(|| fallback_command(view))
+    }
+}
 impl Bot for ChallengerBot {
     fn id(&self) -> &'static str {
         "challenger"

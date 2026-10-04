@@ -1,0 +1,37 @@
+{
+  "matches": 600,
+  "rows": 3975,
+  "baseline": {
+    "cross_entropy": 0.7827988289244171,
+    "brier": 0.4252332797515799
+  },
+  "network": {
+    "cross_entropy": 0.6984162045105234,
+    "brier": 0.39737048574304473
+  },
+  "cross_entropy_paired_delta": {
+    "mean": -0.08438262438549957,
+    "ci95": 0.023328580147197405
+  },
+  "brier_paired_delta": {
+    "mean": -0.02786279402063585,
+    "ci95": 0.008178140328559439
+  },
+  "model_sha256": "0096242fc13fd1d1b5549a77516ec457b07643691962e5354ffbd14a16c4bfdb",
+  "comparison": {
+    "model": "data/match_value/model-v2.bin",
+    "metrics": {
+      "cross_entropy": 0.7103802650459946,
+      "brier": 0.40427133895659223
+    },
+    "sha256": "99569b8310e2c40542b7cdae57f362831e3af9b3d97b68d3c550118570cbbba7",
+    "cross_entropy_paired_delta": {
+      "mean": -0.011964060537053949,
+      "ci95": 0.00571948111141455
+    },
+    "brier_paired_delta": {
+      "mean": -0.0069008532100977,
+      "ci95": 0.0029600413069542416
+    }
+  }
+}

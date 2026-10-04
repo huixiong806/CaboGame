@@ -29,6 +29,10 @@ path = "src/bin/decide.rs"
 name = "cabo-eval"
 path = "src/bin/eval.rs"
 
+[[bin]]
+name = "cabo-match-data"
+path = "src/bin/match_data.rs"
+
 [dependencies]
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }
@@ -36,6 +40,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 futures = "0.3"
 askama = "0.12"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 rand = "0.9"
 thiserror = "2"
 tracing = "0.1"

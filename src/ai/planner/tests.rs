@@ -2,7 +2,7 @@ use super::state::Card;
 use super::*;
 use crate::game::sim::make_ai_session;
 use crate::game::view::project;
-use crate::game::{Pending, Phase, PowerUse, Session, Settings, RANK_COPIES};
+use crate::game::{Pending, Phase, PowerUse, PublicEvent, Session, Settings, RANK_COPIES};
 use rand::{rngs::StdRng, SeedableRng};
 
 fn dealt(seed: u64, n: usize) -> Session {
@@ -12,6 +12,198 @@ fn dealt(seed: u64, n: usize) -> Session {
         s.apply(p, &Command::PeekInitial { slots: [0, 1] }).unwrap();
     }
     s
+}
+
+#[test]
+fn normal_frozen_decisions() {
+    // Frozen on 3d6f668: exercise complete rounds, private draws, powers and late totals.
+    let bot = PlannerBot::new(PlannerCfg {
+        budget_us: 0,
+        simulations: 96,
+        confirmation_samples: 24,
+        ..PlannerCfg::default()
+    });
+    let mut hash = 0xcbf29ce484222325u64;
+    let mut decisions = 0;
+    for n in 2..=4 {
+        for seed in 0..6 {
+            let mut s = dealt(61000 + seed, n);
+            for p in 0..n {
+                s.players[p].total_score = [80, 90, 95, 70][p];
+            }
+            let mut rng = StdRng::seed_from_u64(seed + n as u64 * 101);
+            for _ in 0..120 {
+                let Some(p) = s.actor() else { break };
+                let v = project(&s, Some(p), 0);
+                let c = bot.decide(&v, &mut rng);
+                for b in format!("{c:?}").bytes() {
+                    hash = (hash ^ b as u64).wrapping_mul(0x100000001b3);
+                }
+                decisions += 1;
+                s.apply(p, &c).unwrap();
+            }
+        }
+    }
+    assert_eq!(
+        (decisions, hash),
+        (458, 16368717308336445282),
+        "Normal must keep its frozen decisions"
+    );
+}
+
+#[test]
+fn hard_breaks_a_repeated_public_rotation_but_preserves_one_cycle() {
+    let mut s = dealt(530200, 2);
+    let me = s.actor().unwrap();
+    let cycle: Vec<_> = (0..6)
+        .map(|i| PublicEvent::Exchange {
+            player: (me + i) % 2,
+            source: crate::game::Pile::Discard,
+            slots: vec![0],
+            exposed: vec![[5, 7, 12][i % 3]],
+            incoming: Some([12, 5, 7][i % 3]),
+            success: true,
+        })
+        .collect();
+    s.public_events = cycle.clone();
+    assert!(!repeated_public_cycle(&project(&s, Some(me), 0)));
+    s.public_events.extend(cycle);
+    assert!(repeated_public_cycle(&project(&s, Some(me), 0)));
+    for root_racing in [false, true] {
+        let bot = PlannerBot::new(PlannerCfg {
+            root_racing,
+            ..PlannerCfg::hard()
+        });
+        assert_eq!(
+            bot.decide(&project(&s, Some(me), 0), &mut StdRng::seed_from_u64(7)),
+            Command::BeginDraw
+        );
+        // The cycle decision uses only public events, even if hidden ground truth differs.
+        for card in &mut s.cards {
+            if !card.revealed && !card.known_by.contains(&me) {
+                card.card.rank = 13;
+            }
+        }
+        assert_eq!(
+            bot.decide(&project(&s, Some(me), 0), &mut StdRng::seed_from_u64(7)),
+            Command::BeginDraw
+        );
+    }
+    s.public_events.push(PublicEvent::Discard {
+        player: me,
+        rank: 7,
+        powered: false,
+    });
+    assert!(!repeated_public_cycle(&project(&s, Some(me), 0)));
+    assert!(!PlannerCfg::default().avoid_cycles);
+}
+
+#[test]
+fn model_configuration_fails_explicitly_and_default_normal_never_loads_it() {
+    let missing = "data/nonexistent-match-value-model.bin".to_string();
+    assert!(
+        crate::ai::build_bot("normal", &[("value_model_path".into(), missing.clone())]).is_some()
+    );
+    assert!(crate::ai::build_bot(
+        "hard",
+        &[
+            ("value_model_path".into(), missing),
+            ("learned_value".into(), "true".into())
+        ]
+    )
+    .is_none());
+}
+
+#[test]
+fn local_hard_model_opt_in_enables_the_validated_bundle_only_for_hard() {
+    let ordinary = PlannerCfg::hard_with_model(None);
+    assert!(!ordinary.learned_value && !ordinary.validate_calls);
+    assert_eq!(ordinary.min_cabo_success, 0.75);
+    let learned = PlannerCfg::hard_with_model(Some("data/missing-model.bin".into()));
+    assert!(learned.learned_value && learned.validate_calls && learned.avoid_cycles);
+    assert_eq!(learned.min_cabo_success, 0.0);
+    assert_eq!(learned.simulations, ordinary.simulations);
+    assert!(PlannerBot::try_new(learned).is_err());
+    assert!(!PlannerCfg::default().learned_value && !PlannerCfg::default().validate_calls);
+}
+
+#[test]
+#[ignore = "requires local model; checks production Hard time limit and legal commands"]
+fn local_learned_hard_default_budget_is_bounded() {
+    let path =
+        std::env::var("CABO_MATCH_VALUE_TEST").unwrap_or("data/match_value/model-v1.bin".into());
+    let mut cfg = PlannerCfg::hard_with_model(Some(path));
+    cfg.budget_us = 600000;
+    let bot = PlannerBot::new(cfg);
+    for n in 2..=4 {
+        for draw in [false, true] {
+            let mut s = dealt(41 + n as u64, n);
+            let me = s.actor().unwrap();
+            if draw {
+                s.apply(me, &Command::BeginDraw).unwrap();
+            }
+            let start = Instant::now();
+            let report = bot.analyze(&project(&s, Some(me), 0), &mut StdRng::seed_from_u64(42));
+            assert!(start.elapsed() < std::time::Duration::from_millis(1600));
+            assert!(report.simulations <= 8192);
+            s.apply(me, &report.command).unwrap();
+            println!(
+                "n={n} drew={draw} elapsed_ms={:.1} simulations={}",
+                report.elapsed_us as f64 / 1000.0,
+                report.simulations
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires local trained model; full search must remain isolated from hidden ground truth"]
+fn learned_search_uses_only_legal_information() {
+    let path =
+        std::env::var("CABO_MATCH_VALUE_TEST").unwrap_or("data/match_value/model-v2.bin".into());
+    let s = dealt(16, 4);
+    let me = s.actor().unwrap();
+    let mut other = s.clone();
+    let ids: Vec<_> = s
+        .cards
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| !c.revealed && !c.known_by.contains(&me))
+        .map(|(i, _)| i)
+        .collect();
+    let ranks: Vec<_> = ids.iter().map(|&i| s.cards[i].card.rank).collect();
+    for (&i, &r) in ids.iter().zip(ranks.iter().rev()) {
+        other.cards[i].card.rank = r;
+    }
+    for root_racing in [false, true] {
+        let bot = PlannerBot::new(PlannerCfg {
+            budget_us: 0,
+            simulations: 96,
+            confirmation_samples: 24,
+            root_racing,
+            learned_value: true,
+            value_model_path: path.clone(),
+            blind_keep_evidence: true,
+            behavioral_evidence: true,
+            call_evidence: true,
+            validate_calls: true,
+            ..PlannerCfg::default()
+        });
+        let a = bot.analyze(&project(&s, Some(me), 0), &mut StdRng::seed_from_u64(7));
+        let b = bot.analyze(&project(&other, Some(me), 0), &mut StdRng::seed_from_u64(7));
+        assert_eq!(a.command, b.command);
+        assert_eq!(a.simulations, b.simulations);
+        assert_eq!(
+            a.candidates
+                .iter()
+                .map(|c| (c.visits, c.mean))
+                .collect::<Vec<_>>(),
+            b.candidates
+                .iter()
+                .map(|c| (c.visits, c.mean))
+                .collect::<Vec<_>>()
+        );
+    }
 }
 
 fn exact_state(s: &Session) -> State {
@@ -47,6 +239,11 @@ fn exact_state(s: &Session) -> State {
         totals: s.players.iter().map(|p| p.total_score).collect(),
         score_reset_used: s.players.iter().map(|p| p.score_reset_used).collect(),
         special_tactics: true,
+        blind_keep_evidence: false,
+        reset_policy_player: None,
+        behavioral_evidence: false,
+        call_evidence: false,
+        value_model: None,
         round_scores: s
             .players
             .iter()
@@ -239,25 +436,32 @@ fn hidden_values_do_not_change_observation_policy_or_decision() {
     for &id in &unseen {
         other.cards[id].card.rank = b.cards[id].rank;
     }
-    let bot = PlannerBot::new(PlannerCfg {
-        budget_us: 0,
-        simulations: 64,
-        ..PlannerCfg::default()
-    });
-    let r1 = bot.analyze(&project(&s, Some(p), 0), &mut StdRng::seed_from_u64(7));
-    let r2 = bot.analyze(&project(&other, Some(p), 0), &mut StdRng::seed_from_u64(7));
-    assert_eq!(r1.command, r2.command);
-    assert_eq!(r1.simulations, r2.simulations);
-    assert_eq!(
-        r1.candidates
-            .iter()
-            .map(|c| (c.visits, c.mean))
-            .collect::<Vec<_>>(),
-        r2.candidates
-            .iter()
-            .map(|c| (c.visits, c.mean))
-            .collect::<Vec<_>>()
-    );
+    for root_racing in [false, true] {
+        let bot = PlannerBot::new(PlannerCfg {
+            budget_us: 0,
+            simulations: 64,
+            root_racing,
+            blind_keep_evidence: true,
+            behavioral_evidence: true,
+            call_evidence: true,
+            validate_calls: true,
+            ..PlannerCfg::default()
+        });
+        let r1 = bot.analyze(&project(&s, Some(p), 0), &mut StdRng::seed_from_u64(7));
+        let r2 = bot.analyze(&project(&other, Some(p), 0), &mut StdRng::seed_from_u64(7));
+        assert_eq!(r1.command, r2.command);
+        assert_eq!(r1.simulations, r2.simulations);
+        assert_eq!(
+            r1.candidates
+                .iter()
+                .map(|c| (c.visits, c.mean))
+                .collect::<Vec<_>>(),
+            r2.candidates
+                .iter()
+                .map(|c| (c.visits, c.mean))
+                .collect::<Vec<_>>()
+        );
+    }
     // Secret draw outcomes must split the next information node.
     a.apply(&Action::Draw);
     b.apply(&Action::Draw);
@@ -467,6 +671,71 @@ fn planner_can_deliberately_fail_cabo_to_reset_and_win() {
 }
 
 #[test]
+fn ordinary_incumbent_calls_are_checked_after_final_responses() {
+    let mut s = scoring_fixture(&[vec![0, 0, 4, 4], vec![2, 2, 4, 4]], &[0, 0], &[false; 2]);
+    force_discard_rank(&mut s, 13);
+    let state = exact_state(&s);
+    assert_eq!(policy::choose(&state, 1), Action::Cabo);
+    let view = project(&s, Some(0), 0);
+    let cfg = PlannerCfg {
+        budget_us: 0,
+        simulations: 512,
+        confirmation_samples: 48,
+        ..PlannerCfg::default()
+    };
+    let old = PlannerBot::new(cfg.clone()).analyze(&view, &mut StdRng::seed_from_u64(33));
+    let new = PlannerBot::new(PlannerCfg {
+        validate_calls: true,
+        ..cfg
+    })
+    .analyze(&view, &mut StdRng::seed_from_u64(33));
+    assert_eq!(old.command, Command::CallCabo);
+    assert_eq!(new.command, Command::BeginDraw);
+    let call = new
+        .candidates
+        .iter()
+        .find(|c| c.command == Command::CallCabo)
+        .unwrap();
+    assert!(call.cabo_success.unwrap() < 0.75);
+}
+
+#[test]
+fn higher_hand_call_can_have_positive_match_value_without_forcing_a_call() {
+    let mut s = scoring_fixture(
+        &[vec![7, 7, 8, 8], vec![3, 4, 5, 6]],
+        &[50, 85],
+        &[true, false],
+    );
+    force_discard_rank(&mut s, 13);
+    let view = project(&s, Some(0), 0);
+    let cfg = PlannerCfg {
+        budget_us: 0,
+        simulations: 1024,
+        confirmation_samples: 128,
+        opponent_style: 1,
+        validate_calls: true,
+        min_cabo_success: 0.,
+        ..PlannerCfg::default()
+    };
+    let report = PlannerBot::new(cfg).analyze(&view, &mut StdRng::seed_from_u64(29));
+    let call = report
+        .candidates
+        .iter()
+        .find(|c| c.command == Command::CallCabo)
+        .unwrap();
+    assert_eq!(call.cabo_success, Some(0.));
+    assert!(
+        call.mean > 0.6,
+        "a failed Cabo can still win the whole match"
+    );
+    assert_ne!(
+        report.command,
+        Command::CallCabo,
+        "removing a strict-lowest gate must not force a call when another action is better"
+    );
+}
+
+#[test]
 fn final_response_preserves_exact_reset_instead_of_lowering_hand_sum() {
     let mut s = scoring_fixture(&[vec![1, 1], vec![5, 5, 5, 5]], &[60, 80], &[false; 2]);
     s.cabo_caller = Some(0);
@@ -610,6 +879,85 @@ fn replacement_evidence_follows_the_replaced_slot() {
 }
 
 #[test]
+fn blind_replacement_evidence_never_uses_the_exposed_old_rank() {
+    let mut s = dealt(28, 3);
+    let p = s.actor().unwrap();
+    s.apply(p, &Command::BeginDraw).unwrap();
+    s.apply(p, &Command::DrawSwap { slots: vec![2] }).unwrap();
+    let view = project(&s, Some(s.actor().unwrap()), 0);
+    let mut altered = view.clone();
+    for e in &mut altered.public_events {
+        if let PublicEvent::Exchange { exposed, .. } = e {
+            exposed[0] = (exposed[0] + 5) % 14;
+        }
+    }
+    let a =
+        Sampler::configured(&view, &mut StdRng::seed_from_u64(1), true, true, true, true).unwrap();
+    let b = Sampler::configured(
+        &altered,
+        &mut StdRng::seed_from_u64(1),
+        true,
+        true,
+        true,
+        true,
+    )
+    .unwrap();
+    let weights = |s: &Sampler| s.template.cards[s.template.hands[p][2] as usize].log_weights;
+    assert_eq!(weights(&a), weights(&b));
+    assert!(weights(&a).iter().any(|&w| w != 0.0));
+    for slot in [0, 1, 3] {
+        let id = a.template.hands[p][slot] as usize;
+        assert_eq!(a.template.cards[id].log_weights, [0.0; 14]);
+    }
+}
+
+#[test]
+fn enhanced_evidence_replays_like_the_simulator() {
+    for seed in 0..12 {
+        let mut s = dealt(110000 + seed, 4);
+        let mut fast = exact_state(&s);
+        fast.blind_keep_evidence = true;
+        fast.behavioral_evidence = true;
+        fast.call_evidence = true;
+        let mut rng = StdRng::seed_from_u64(seed);
+        for step in 0..120 {
+            let Some(actor) = s.actor() else { break };
+            let c = ChallengerBot.decide(&project(&s, Some(actor), 0), &mut rng);
+            let a = match &c {
+                Command::BeginDraw => Action::Draw,
+                Command::DrawSwap { slots } => Action::Replace(slots.clone()),
+                Command::SwapOnce { slots } => Action::Exchange(slots.clone()),
+                Command::DiscardDrawn { power } => Action::Discard(*power),
+                Command::CallCabo => Action::Cabo,
+                _ => panic!("unexpected {c:?}"),
+            };
+            s.apply(actor, &c).unwrap();
+            fast.apply(&a);
+            let Some(next) = s.actor() else { break };
+            let replay = Sampler::configured(
+                &project(&s, Some(next), 0),
+                &mut rng,
+                true,
+                true,
+                true,
+                true,
+            )
+            .unwrap();
+            for p in 0..4 {
+                for slot in 0..s.players[p].slots.len() {
+                    assert_eq!(
+                        fast.cards[fast.hands[p][slot] as usize].log_weights,
+                        replay.template.cards[replay.template.hands[p][slot] as usize].log_weights,
+                        "seed {seed} player {p} slot {slot} step {step} events {:?}",
+                        s.public_events
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn candidate_set_includes_group_exchange_and_known_low_power_target() {
     let mut s = dealt(2, 3);
     let me = s.actor().unwrap();
@@ -646,38 +994,45 @@ fn candidate_set_includes_group_exchange_and_known_low_power_target() {
 
 #[test]
 fn new_bots_play_strictly_legal_games_without_fallbacks() {
-    let bot = PlannerBot::new(PlannerCfg {
-        budget_us: 0,
-        simulations: 24,
-        ..PlannerCfg::default()
-    });
-    for n in 2..=4 {
-        for seed in 0..3 {
-            let mut s = dealt(seed, n);
-            let mut rng = StdRng::seed_from_u64(seed + 91);
-            for _ in 0..2000 {
-                match s.phase {
-                    Phase::Turn { current, .. } => {
-                        let v = project(&s, Some(current), 0);
-                        let c = if current == 0 {
-                            bot.decide(&v, &mut rng)
-                        } else {
-                            ChallengerBot.decide(&v, &mut rng)
-                        };
-                        s.apply(current, &c)
-                            .unwrap_or_else(|e| panic!("{e}: {c:?} panel {:?}", v.panel));
-                    }
-                    Phase::RoundEnd => {
-                        s.next_round().unwrap();
-                        for p in 0..n {
-                            s.apply(p, &Command::PeekInitial { slots: [0, 1] }).unwrap();
+    for root_racing in [false, true] {
+        let bot = PlannerBot::new(PlannerCfg {
+            budget_us: 0,
+            simulations: 24,
+            root_racing,
+            blind_keep_evidence: true,
+            behavioral_evidence: true,
+            call_evidence: true,
+            validate_calls: true,
+            ..PlannerCfg::default()
+        });
+        for n in 2..=4 {
+            for seed in 0..3 {
+                let mut s = dealt(seed, n);
+                let mut rng = StdRng::seed_from_u64(seed + 91);
+                for _ in 0..2000 {
+                    match s.phase {
+                        Phase::Turn { current, .. } => {
+                            let v = project(&s, Some(current), 0);
+                            let c = if current == 0 {
+                                bot.decide(&v, &mut rng)
+                            } else {
+                                ChallengerBot.decide(&v, &mut rng)
+                            };
+                            s.apply(current, &c)
+                                .unwrap_or_else(|e| panic!("{e}: {c:?} panel {:?}", v.panel));
                         }
+                        Phase::RoundEnd => {
+                            s.next_round().unwrap();
+                            for p in 0..n {
+                                s.apply(p, &Command::PeekInitial { slots: [0, 1] }).unwrap();
+                            }
+                        }
+                        Phase::GameOver { .. } => break,
+                        _ => unreachable!(),
                     }
-                    Phase::GameOver { .. } => break,
-                    _ => unreachable!(),
                 }
+                assert!(matches!(s.phase, Phase::GameOver { .. }));
             }
-            assert!(matches!(s.phase, Phase::GameOver { .. }));
         }
     }
 }
@@ -895,6 +1250,106 @@ fn posterior_calibration() {
                 b[1] / b[0],
                 b[2] / b[0]
             );
+        }
+    }
+}
+
+#[test]
+#[ignore = "offline comparison of legal posterior predictions with withheld ground truth"]
+fn blind_keep_calibration() {
+    let mut error = [[0.0; 4]; 4];
+    let mut checks = 0;
+    let base = std::env::var("CABO_DIAG_SEED")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(106000);
+    let mut blocks: Vec<Vec<[f64; 2]>> = vec![Vec::new(); 4];
+    for seed in 0..100 {
+        let mut s = dealt(base + seed, 4);
+        let mut play_rng = StdRng::seed_from_u64(seed);
+        let mut seed_error = [[0.0; 4]; 4];
+        let mut seed_checks = 0;
+        for step in 0..120 {
+            let Some(me) = s.actor() else { break };
+            let v = project(&s, Some(me), 0);
+            if step % 5 == 0 && matches!(v.panel, Panel::Idle { .. }) {
+                for (mode, row) in seed_error.iter_mut().enumerate() {
+                    let mut rng = StdRng::seed_from_u64(seed * 131 + step);
+                    let mut sampler =
+                        Sampler::configured(&v, &mut rng, true, mode >= 1, mode >= 2, mode >= 3)
+                            .unwrap();
+                    let mut means = [0.0; 4];
+                    let mut lowest = 0;
+                    for _ in 0..128 {
+                        let world = sampler.sample(&mut rng);
+                        let sums: Vec<u32> = world
+                            .hands
+                            .iter()
+                            .map(|h| {
+                                h.iter()
+                                    .map(|&id| world.cards[id as usize].rank as u32)
+                                    .sum()
+                            })
+                            .collect();
+                        for p in 0..4 {
+                            means[p] += sums[p] as f64 / 128.0;
+                        }
+                        lowest +=
+                            u32::from((0..4).filter(|&p| p != me).all(|p| sums[me] < sums[p]));
+                    }
+                    let sums: Vec<u32> = s
+                        .players
+                        .iter()
+                        .map(|p| {
+                            p.slots
+                                .iter()
+                                .map(|&id| s.cards[id as usize].card.rank as u32)
+                                .sum()
+                        })
+                        .collect();
+                    for p in 0..4 {
+                        if p != me {
+                            row[0] += means[p] - sums[p] as f64;
+                            row[1] += (means[p] - sums[p] as f64).abs();
+                        }
+                    }
+                    let pred = lowest as f64 / 128.0;
+                    let truth =
+                        u8::from((0..4).filter(|&p| p != me).all(|p| sums[me] < sums[p])) as f64;
+                    row[2] += (pred - truth).powi(2);
+                    row[3] += pred - truth;
+                }
+                seed_checks += 1;
+            }
+            s.apply(me, &ChallengerBot.decide(&v, &mut play_rng))
+                .unwrap();
+        }
+        checks += seed_checks;
+        for mode in 0..4 {
+            for i in 0..4 {
+                error[mode][i] += seed_error[mode][i];
+            }
+            blocks[mode].push([
+                seed_error[mode][1] / (3 * seed_checks) as f64,
+                seed_error[mode][2] / seed_checks as f64,
+            ]);
+        }
+    }
+    for (i, e) in error.iter().enumerate() {
+        println!("blind_keep={i} observations={checks} opponent_bias={:.3} MAE={:.3} lowest_Brier={:.4} lowest_bias={:.4}",e[0]/(checks*3) as f64,e[1]/(checks*3) as f64,e[2]/checks as f64,e[3]/checks as f64);
+    }
+    for mode in 1..4 {
+        for (j, name) in ["MAE", "Brier"].iter().enumerate() {
+            let d: Vec<f64> = blocks[mode]
+                .iter()
+                .zip(&blocks[0])
+                .map(|(a, b)| a[j] - b[j])
+                .collect();
+            let n = d.len() as f64;
+            let mean = d.iter().sum::<f64>() / n;
+            let ci =
+                1.96 * (d.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / (n * (n - 1.0))).sqrt();
+            println!("base={base} mode={mode} paired_delta_{name}={mean:+.5} +/- {ci:.5} (100 seed-block 95% CI)");
         }
     }
 }

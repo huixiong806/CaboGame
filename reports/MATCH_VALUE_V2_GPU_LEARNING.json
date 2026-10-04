@@ -1,0 +1,75 @@
+{
+  "architecture": "Deep Sets 7-32-32, pooled 64-32-1 + frozen softmax residual",
+  "parameters": 3425,
+  "backend": "PyTorch autograd",
+  "device": "cuda",
+  "torch_version": "2.9.1+cu128",
+  "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+  "batch_size": 512,
+  "epochs": 25,
+  "selected_epoch": 25,
+  "training_seed": 2718,
+  "training_seconds": 137.79861240001628,
+  "cuda_numpy_max_error": 2.1551058193569617e-07,
+  "train": {
+    "matches": 100000,
+    "rows": 452173,
+    "baseline": {
+      "cross_entropy": 0.7354438304901123,
+      "brier": 0.4027504324913025
+    },
+    "network": {
+      "cross_entropy": 0.6674351692199707,
+      "brier": 0.3867303729057312
+    },
+    "cross_entropy_paired_delta": {
+      "mean": -0.06800871598570236,
+      "ci95": 0.0020785513068780344
+    },
+    "brier_paired_delta": {
+      "mean": -0.016020089980280913,
+      "ci95": 0.0006254670412926374
+    }
+  },
+  "validation": {
+    "matches": 12000,
+    "rows": 53994,
+    "baseline": {
+      "cross_entropy": 0.7259449362754822,
+      "brier": 0.40003764629364014
+    },
+    "network": {
+      "cross_entropy": 0.6616498827934265,
+      "brier": 0.38390350341796875
+    },
+    "cross_entropy_paired_delta": {
+      "mean": -0.06429510334362638,
+      "ci95": 0.005974825119610169
+    },
+    "brier_paired_delta": {
+      "mean": -0.01613417385262668,
+      "ci95": 0.0018448044502351179
+    }
+  },
+  "test": {
+    "matches": 12000,
+    "rows": 54222,
+    "baseline": {
+      "cross_entropy": 0.7372454404830933,
+      "brier": 0.4035683274269104
+    },
+    "network": {
+      "cross_entropy": 0.6669592261314392,
+      "brier": 0.38736841082572937
+    },
+    "cross_entropy_paired_delta": {
+      "mean": -0.0702861973264517,
+      "ci95": 0.006062041265915314
+    },
+    "brier_paired_delta": {
+      "mean": -0.01619988557308708,
+      "ci95": 0.0017160096527113642
+    }
+  },
+  "total_seconds": 142.97943910001777
+}

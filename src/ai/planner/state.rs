@@ -57,6 +57,11 @@ pub(super) struct State {
     pub score_reset_used: Vec<bool>,
     /// Strategy ablation only; settlement rules are always enabled.
     pub special_tactics: bool,
+    pub blind_keep_evidence: bool,
+    pub reset_policy_player: Option<usize>,
+    pub behavioral_evidence: bool,
+    pub call_evidence: bool,
+    pub value_model: Option<std::sync::Arc<super::match_value::MatchValue>>,
     pub actor: usize,
     pub stage: Stage,
     pub caller: Option<usize>,
@@ -86,6 +91,43 @@ fn normalize(weights: &mut [f32; 14]) {
     for w in weights {
         *w = (*w - top).max(-12.0);
     }
+}
+
+pub(super) fn prior_mean(weights: &[f32; 14]) -> f32 {
+    let mut den = 0.0;
+    let mut sum = 0.0;
+    for r in 0..14 {
+        let p = crate::game::RANK_COPIES[r] as f32 * weights[r].exp();
+        sum += r as f32 * p;
+        den += p;
+    }
+    sum / den
+}
+
+pub(super) fn swap_evidence(weights: &mut [f32; 14], threshold: f32, giving: bool) {
+    for (r, w) in weights.iter_mut().enumerate() {
+        let delta = if giving {
+            threshold - r as f32
+        } else {
+            r as f32 - threshold
+        };
+        *w += (0.3 + 0.7 / (1.0 + (delta / 2.0).exp())).ln();
+    }
+    normalize(weights);
+}
+
+pub(super) fn call_threshold(
+    known: usize,
+    unknown: usize,
+    rival_size: usize,
+    total: u32,
+    reset_used: bool,
+) -> Option<f32> {
+    // Late calls may deliberately seek +penalty => 100. Do not force a low-hand explanation.
+    if known == 0 || (total >= 65 && !reset_used) {
+        return None;
+    }
+    Some(((4.5 * rival_size as f32 - 6.5 * unknown as f32 - 2.0) / known as f32).clamp(0.0, 13.0))
 }
 
 impl State {
@@ -178,11 +220,22 @@ impl State {
                     }
                 }
                 self.cards[taken as usize].revealed = false;
+                if self.behavioral_evidence && source == Pile::Discard {
+                    // Public acquisitions start a new hand trace. Old private-selection
+                    // evidence has no meaning for a rank already known to every seat.
+                    self.cards[taken as usize].log_weights = [0.0; 14];
+                }
                 if source == Pile::Draw && success && previously_known {
                     keep_evidence(
                         &mut self.cards[taken as usize].log_weights,
                         ranks.iter().map(|&r| r as f32).sum(),
                     );
+                } else if self.blind_keep_evidence
+                    && source == Pile::Draw
+                    && success
+                    && slots.len() == 1
+                {
+                    keep_evidence(&mut self.cards[taken as usize].log_weights, 7.0);
                 }
                 if success {
                     self.hands[p].insert(slots[0] as usize, taken);
@@ -220,6 +273,24 @@ impl State {
                         } => {
                             let a = self.hands[p][my_slot as usize];
                             let b = self.hands[player][slot as usize];
+                            if self.behavioral_evidence {
+                                let ca = self.cards[a as usize];
+                                let cb = self.cards[b as usize];
+                                if ca.known & (1 << p) != 0 {
+                                    swap_evidence(
+                                        &mut self.cards[a as usize].log_weights,
+                                        prior_mean(&cb.log_weights),
+                                        true,
+                                    );
+                                }
+                                if cb.known & (1 << p) != 0 {
+                                    swap_evidence(
+                                        &mut self.cards[b as usize].log_weights,
+                                        prior_mean(&ca.log_weights),
+                                        false,
+                                    );
+                                }
+                            }
                             self.hands[p][my_slot as usize] = b;
                             self.hands[player][slot as usize] = a;
                         }
@@ -228,6 +299,14 @@ impl State {
                         player: p,
                         power: *power,
                     });
+                    if self.behavioral_evidence && self.cards[cid as usize].rank >= 9 {
+                        let r = (self.cards[cid as usize].rank + 2).min(13);
+                        for &id in &self.hands[p] {
+                            if self.cards[id as usize].known & (1 << p) != 0 {
+                                survival_evidence(&mut self.cards[id as usize].log_weights, r);
+                            }
+                        }
+                    }
                 } else {
                     let r = self.cards[cid as usize].rank;
                     for &id in &self.hands[p] {
@@ -249,6 +328,34 @@ impl State {
             Action::Cabo => {
                 assert_eq!(self.stage, Stage::Idle);
                 assert!(self.caller.is_none());
+                if self.call_evidence {
+                    let known = self.hands[p]
+                        .iter()
+                        .filter(|&&id| self.cards[id as usize].known & (1 << p) != 0)
+                        .count();
+                    let rival_size = (0..self.n())
+                        .filter(|&j| j != p)
+                        .map(|j| self.hands[j].len())
+                        .min()
+                        .unwrap();
+                    if let Some(threshold) = call_threshold(
+                        known,
+                        self.hands[p].len() - known,
+                        rival_size,
+                        self.totals[p],
+                        self.score_reset_used[p],
+                    ) {
+                        for &id in &self.hands[p] {
+                            if self.cards[id as usize].known & (1 << p) != 0 {
+                                swap_evidence(
+                                    &mut self.cards[id as usize].log_weights,
+                                    threshold,
+                                    false,
+                                );
+                            }
+                        }
+                    }
+                }
                 self.caller = Some(p);
                 self.extra = (1..self.n()).map(|i| (p + i) % self.n()).collect();
                 self.event(PublicEvent::Cabo { player: p });
@@ -308,6 +415,10 @@ impl State {
     }
 
     pub fn utility_for(&self, totals: &[u32], me: usize) -> f64 {
+        self.utility_with_resets(totals, &self.score_reset_used, me)
+    }
+
+    pub fn utility_with_resets(&self, totals: &[u32], used: &[bool], me: usize) -> f64 {
         let max = *totals.iter().max().unwrap();
         if max >= self.target {
             let min = *totals.iter().min().unwrap();
@@ -318,6 +429,13 @@ impl State {
             };
         }
         // Approximate future-round uncertainty. Multiseat normalization: equal totals => 1/n.
+        if let Some(value) = self
+            .value_model
+            .as_ref()
+            .and_then(|m| m.predict(totals, used, self.target, self.penalty))
+        {
+            return value[me];
+        }
         let temp = (8.0 * ((self.target - max) as f64 / 8.0).sqrt()).max(6.0);
         let min = *totals.iter().min().unwrap() as f64;
         let weights: Vec<f64> = totals

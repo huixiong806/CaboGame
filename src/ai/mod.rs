@@ -75,7 +75,7 @@ pub fn build_bot(id: &str, cfg: &[(String, String)]) -> Option<Arc<dyn Bot>> {
             if !p.set(key, value) { return None; }
         }
         let inner: Arc<dyn Bot> = if id == "challenger" { Arc::new(planner::ChallengerBot) }
-            else { Arc::new(planner::PlannerBot::new(p)) };
+            else { Arc::new(planner::PlannerBot::try_new(p).ok()?) };
         return Some(match id {
             "normal" => Arc::new(AliasBot { inner, id: "normal", name: "普通 AI（Normal）" }),
             "hard" => Arc::new(AliasBot { inner, id: "hard", name: "困难 AI（Hard）" }),

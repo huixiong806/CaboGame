@@ -1,0 +1,139 @@
+{
+  "architecture": "Deep Sets 7-32-32, pooled 64-32-1 + frozen softmax residual",
+  "parameters": 3425,
+  "backend": "PyTorch autograd",
+  "device": "cuda",
+  "torch_version": "2.9.1+cu128",
+  "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+  "batch_size": 1024,
+  "epochs": 25,
+  "selected_epoch": 16,
+  "training_seed": 2718,
+  "training_seconds": 12.815356300096028,
+  "cuda_numpy_max_error": 3.0964258468380024e-07,
+  "train": {
+    "matches": 100000,
+    "rows": 452173,
+    "baseline": {
+      "cross_entropy": 0.7354438832733992,
+      "brier": 0.4027504373165562
+    },
+    "network": {
+      "cross_entropy": 0.6702659726142883,
+      "brier": 0.3883362114429474
+    },
+    "cross_entropy_paired_delta": {
+      "mean": -0.06517789513541593,
+      "ci95": 0.002169052811724012
+    },
+    "brier_paired_delta": {
+      "mean": -0.014414180755268284,
+      "ci95": 0.0006964657899463374
+    }
+  },
+  "validation": {
+    "matches": 12000,
+    "rows": 53994,
+    "baseline": {
+      "cross_entropy": 0.7259450220693169,
+      "brier": 0.4000376835925152
+    },
+    "network": {
+      "cross_entropy": 0.6642971634864807,
+      "brier": 0.3852408528327942
+    },
+    "cross_entropy_paired_delta": {
+      "mean": -0.061647875686365365,
+      "ci95": 0.006222206169619578
+    },
+    "brier_paired_delta": {
+      "mean": -0.014796834479578622,
+      "ci95": 0.002068610108932294
+    }
+  },
+  "test": {
+    "matches": 12000,
+    "rows": 54222,
+    "baseline": {
+      "cross_entropy": 0.7372454684558429,
+      "brier": 0.4035683259252464
+    },
+    "network": {
+      "cross_entropy": 0.6696906089782715,
+      "brier": 0.38858750462532043
+    },
+    "cross_entropy_paired_delta": {
+      "mean": -0.06755484545614224,
+      "ci95": 0.006290482641283288
+    },
+    "brier_paired_delta": {
+      "mean": -0.014980792130908251,
+      "ci95": 0.001939175940232263
+    }
+  },
+  "search_policy_iteration": {
+    "init_model": "data/match_value/model-v2.bin",
+    "domain_weight": 0.5,
+    "train": {
+      "matches": 1200,
+      "rows": 7989,
+      "baseline": {
+        "cross_entropy": 0.8033358315831233,
+        "brier": 0.44326742862658036
+      },
+      "network": {
+        "cross_entropy": 0.7132543921470642,
+        "brier": 0.4156351685523987
+      },
+      "cross_entropy_paired_delta": {
+        "mean": -0.09008146273383379,
+        "ci95": 0.017811691828285667
+      },
+      "brier_paired_delta": {
+        "mean": -0.02763227445557864,
+        "ci95": 0.005991438698352603
+      }
+    },
+    "validation": {
+      "matches": 300,
+      "rows": 1961,
+      "baseline": {
+        "cross_entropy": 0.7478319536955127,
+        "brier": 0.4214066753918602
+      },
+      "network": {
+        "cross_entropy": 0.6891845464706421,
+        "brier": 0.40555882453918457
+      },
+      "cross_entropy_paired_delta": {
+        "mean": -0.05864744106635172,
+        "ci95": 0.024404026694407582
+      },
+      "brier_paired_delta": {
+        "mean": -0.015847868562535106,
+        "ci95": 0.010795874729141182
+      }
+    },
+    "test": {
+      "matches": 600,
+      "rows": 3975,
+      "baseline": {
+        "cross_entropy": 0.7827988289244171,
+        "brier": 0.4252332797515799
+      },
+      "network": {
+        "cross_entropy": 0.6984161734580994,
+        "brier": 0.39737045764923096
+      },
+      "cross_entropy_paired_delta": {
+        "mean": -0.08438262494955265,
+        "ci95": 0.02332858019334266
+      },
+      "brier_paired_delta": {
+        "mean": -0.027862797668506745,
+        "ci95": 0.00817814034660434
+      }
+    }
+  },
+  "total_seconds": 15.344108400051482
+}

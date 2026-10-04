@@ -8,10 +8,14 @@
 简短路线审计见 [AI_REBUILD.md](AI_REBUILD.md)，旧规则下的实现说明与实测见 [v4 验收记录](reports/V4_RESULTS.md)，新增策略见 [特殊规则 AI 验收记录](reports/SPECIAL_RULES_RESULTS.md)。当前难度分工见 [AI_DIFFICULTIES.md](AI_DIFFICULTIES.md)：
 
 - **Easy / 简单 AI**：原搜索实现及默认策略网络，保留为简单难度和对照。
-- **Normal / 普通 AI**：当前信念规划加特殊规则策略，默认新增 AI；能利用凑满分、完成/保护高牌双对、破坏对手组合。默认每步最多约 300ms，无需 Python/GPU/模型文件。作为普通难度候选，完成验收后固定版本。
-- **Hard / 困难 AI**：持续迭代的最强版本入口。目前沿用 Normal 的已验收策略，将搜索预算提高到约 600ms、模拟上限与独立复核样本加倍；更高预算本身不能证明棋力更强，后续通过独立对照验收晋升。
+- **Normal / 普通 AI**：当前信念规划加特殊规则策略，默认新增 AI；能利用凑满分、完成/保护高牌双对、破坏对手组合。默认每步最多约 300ms，无需 Python/GPU/模型文件。固定为稳定基准，新的研究不会改变默认策略。
+- **Hard / 困难 AI**：持续迭代的最强版本入口。目前保留已验收规划策略，将搜索预算提高到约 600ms、模拟上限与独立复核样本加倍，并能从公开历史识别重复弃牌交换循环后摸牌打破停滞；更高预算本身不能证明棋力更强，学习候选通过独立对照验收晋升。
 
 `challenger` 陪练保留为离线评估对手，隐藏于大厅难度选单。
+
+Hard 的学习路线、真实引擎自我对弈和本地价值网络实验见 [HARD_LEARNING.md](HARD_LEARNING.md)。训练样本和模型仅保存在本机 `data/`；没有显式环境变量时不读取研究模型。已验证的 V1 加宣告目标组合可通过 `CABO_HARD_VALUE_MODEL` 本地试用，完整结果与适用条件见报告。
+
+本轮配对对局、学习指标、未晋升候选与防循环修复的结果见 [HARD_ITERATION_RESULTS.md](reports/HARD_ITERATION_RESULTS.md)。
 
 旧简单 AI、旧战术 AI、v2 和无学习组件的独立入口，以及旧训练/实验工具，已归档到 [历史备份分支](https://github.com/huixiong806/CaboGame/tree/codex/archive-legacy-ai-20261004)。该分支保存清理前的源码、文本权重与报告；二进制训练数据只保留在本机。
 

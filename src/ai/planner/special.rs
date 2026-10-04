@@ -21,6 +21,13 @@ pub(super) fn call_relevant(s: &State) -> bool {
         .iter()
         .map(|&id| s.visible(id, s.actor))
         .collect();
+    if s.reset_policy_player == Some(s.actor)
+        && !s.score_reset_used[s.actor]
+        && s.totals[s.actor] < scoring::RESET_AT
+        && s.totals[s.actor] + 13 * hand.len() as u32 + s.penalty >= scoring::RESET_AT
+    {
+        return true;
+    }
     let Some(hand) = known_hand(&hand) else {
         return false;
     };
@@ -28,6 +35,98 @@ pub(super) fn call_relevant(s: &State) -> bool {
         || (!s.score_reset_used[s.actor]
             && s.totals[s.actor] + hand.iter().map(|&r| r as u32).sum::<u32>() + s.penalty
                 == scoring::RESET_AT)
+}
+
+// Distribution convolution, not rounding a hand's mean to an integer. This is
+// an action-ranking approximation; actual search settlement uses joint finite-deck worlds.
+pub(super) fn uncertain_reset_bonus(s: &State, info: &Info, action: &Action) -> f64 {
+    let me = s.actor;
+    if !s.special_tactics
+        || s.reset_policy_player != Some(me)
+        || s.score_reset_used[me]
+        || s.totals[me] >= scoring::RESET_AT
+        || s.totals[me] + 13 * s.hands[me].len() as u32 + s.penalty < scoring::RESET_AT
+    {
+        return 0.0;
+    }
+    let mut after = info.probs[me].clone();
+    let mut values = info.values[me].clone();
+    match action {
+        Action::Exchange(slots) | Action::Replace(slots) => {
+            if slots.len() > 1
+                && !slots.iter().all(|&i| {
+                    values[i as usize].is_some() && values[i as usize] == values[slots[0] as usize]
+                })
+            {
+                return 0.0;
+            }
+            let id = match action {
+                Action::Exchange(_) => *s.discard.last().unwrap(),
+                _ => {
+                    let Stage::Drew(id) = s.stage else { return 0.0 };
+                    id
+                }
+            };
+            let Some(rank) = s.visible(id, me) else {
+                return 0.0;
+            };
+            let mut p = [0.0; 14];
+            p[rank as usize] = 1.0;
+            for i in (0..after.len()).rev() {
+                if slots.contains(&(i as u8)) {
+                    after.remove(i);
+                    values.remove(i);
+                }
+            }
+            let first = *slots.iter().min().unwrap() as usize;
+            after.insert(first, p);
+            values.insert(first, Some(rank));
+        }
+        Action::Discard(Some(PowerUse::Swap {
+            my_slot,
+            player,
+            slot,
+        })) => {
+            after[*my_slot as usize] = info.probs[*player][*slot as usize];
+            values[*my_slot as usize] = info.values[*player][*slot as usize];
+        }
+        Action::Cabo => {}
+        _ => return 0.0,
+    }
+    let potential = |probs: &[[f64; 14]], values: &[Option<u8>], call: bool| {
+        // Existing deterministic special tactics already account for known hands.
+        if values.iter().all(Option::is_some) {
+            return 0.0;
+        }
+        let mut d = vec![1.0];
+        for p in probs {
+            let mut next = vec![0.0; d.len() + 13];
+            for (i, &v) in d.iter().enumerate() {
+                for (r, &w) in p.iter().enumerate() {
+                    next[i + r] += v * w;
+                }
+            }
+            d = next;
+        }
+        let target = scoring::RESET_AT - s.totals[me];
+        let direct = d.get(target as usize).copied().unwrap_or(0.0);
+        let via_call = if s.caller.is_none() && target >= s.penalty {
+            let sum = target - s.penalty;
+            d.get(sum as usize).copied().unwrap_or(0.0) * (1.0 - info.p_lowest_at(me, sum))
+        } else {
+            0.0
+        };
+        50.0 * if call {
+            via_call
+        } else {
+            direct.max(0.4 * via_call)
+        }
+    };
+    if matches!(action, Action::Cabo) {
+        potential(&after, &values, true)
+    } else {
+        potential(&after, &values, false) - potential(&info.probs[me], &info.values[me], false)
+    }
 }
 
 fn known_call_value(s: &State, info: &Info) -> Option<f64> {
@@ -39,7 +138,7 @@ fn known_call_value(s: &State, info: &Info) -> Option<f64> {
         Some(s.actor),
         s.penalty,
     );
-    Some(s.utility_for(&result.totals, s.actor))
+    Some(s.utility_with_resets(&result.totals, &result.reset_used, s.actor))
 }
 
 pub(super) fn preferred_call(s: &State, info: &Info) -> bool {

@@ -5,7 +5,10 @@ use rand::{Rng, RngCore};
 use crate::game::view::{Panel, PlayerView};
 use crate::game::{Pile, PowerUse, PublicEvent, RANK_COPIES};
 
-use super::state::{keep_evidence, survival_evidence, Card, Stage, State};
+use super::state::call_threshold;
+use super::state::{
+    keep_evidence, prior_mean, survival_evidence, swap_evidence, Card, Stage, State,
+};
 
 #[derive(Clone, Copy, Default)]
 struct Trace {
@@ -13,7 +16,12 @@ struct Trace {
     known: u8,
 }
 
-fn evidence(view: &PlayerView) -> Vec<Vec<[f32; 14]>> {
+fn evidence(
+    view: &PlayerView,
+    blind_keep: bool,
+    behavioral: bool,
+    call: bool,
+) -> Vec<Vec<[f32; 14]>> {
     let n = view.all_seats.len();
     let blank = || {
         view.all_seats
@@ -63,22 +71,37 @@ fn evidence(view: &PlayerView) -> Vec<Vec<[f32; 14]>> {
                     {
                         return blank();
                     }
-                    let a = hands[*actor][my_slot as usize];
-                    hands[*actor][my_slot as usize] = hands[player][slot as usize];
+                    let mut a = hands[*actor][my_slot as usize];
+                    let mut b = hands[player][slot as usize];
+                    if behavioral {
+                        let am = prior_mean(&a.weights);
+                        let bm = prior_mean(&b.weights);
+                        if a.known & (1 << actor) != 0 {
+                            swap_evidence(&mut a.weights, bm, true);
+                        }
+                        if b.known & (1 << actor) != 0 {
+                            swap_evidence(&mut b.weights, am, false);
+                        }
+                    }
+                    hands[*actor][my_slot as usize] = b;
                     hands[player][slot as usize] = a;
                 }
             },
             PublicEvent::Discard {
                 player,
                 rank,
-                powered: false,
+                powered,
             } => {
                 let Some(hand) = hands.get_mut(*player) else {
                     return blank();
                 };
+                if *powered && (!behavioral || *rank < 9) {
+                    continue;
+                }
+                let rejected = if *powered { (rank + 2).min(13) } else { *rank };
                 for t in hand {
                     if t.known & (1 << player) != 0 {
-                        survival_evidence(&mut t.weights, *rank);
+                        survival_evidence(&mut t.weights, rejected);
                     }
                 }
             }
@@ -122,6 +145,11 @@ fn evidence(view: &PlayerView) -> Vec<Vec<[f32; 14]>> {
                     }
                     if *source == Pile::Draw && all_known {
                         keep_evidence(&mut new.weights, exposed.iter().map(|&r| r as f32).sum());
+                    } else if blind_keep && *source == Pile::Draw && slots.len() == 1 {
+                        // The old rank was unknown to the actor before choosing. Its newly
+                        // exposed value is not evidence about why they chose the incoming card.
+                        // Use a broad prior threshold, with the existing 12% lapse component.
+                        keep_evidence(&mut new.weights, 7.0);
                     }
                 } else {
                     for &s in slots {
@@ -132,6 +160,31 @@ fn evidence(view: &PlayerView) -> Vec<Vec<[f32; 14]>> {
                     hand.insert(slots[0] as usize, new);
                 } else {
                     hand.push(new);
+                }
+            }
+            PublicEvent::Cabo { player } if call => {
+                let known = hands[*player]
+                    .iter()
+                    .filter(|t| t.known & (1 << player) != 0)
+                    .count();
+                let rival_size = (0..n)
+                    .filter(|&p| p != *player)
+                    .map(|p| hands[p].len())
+                    .min()
+                    .unwrap();
+                let seat = &view.all_seats[*player];
+                if let Some(threshold) = call_threshold(
+                    known,
+                    hands[*player].len() - known,
+                    rival_size,
+                    seat.total_score,
+                    seat.score_reset_used,
+                ) {
+                    for t in &mut hands[*player] {
+                        if t.known & (1 << player) != 0 {
+                            swap_evidence(&mut t.weights, threshold, false);
+                        }
+                    }
                 }
             }
             _ => {}
@@ -158,6 +211,26 @@ pub(super) struct Sampler {
 
 impl Sampler {
     pub fn new(view: &PlayerView, rng: &mut dyn RngCore, use_evidence: bool) -> Option<Self> {
+        Self::with_blind_keep(view, rng, use_evidence, false)
+    }
+
+    pub fn with_blind_keep(
+        view: &PlayerView,
+        rng: &mut dyn RngCore,
+        use_evidence: bool,
+        blind_keep: bool,
+    ) -> Option<Self> {
+        Self::configured(view, rng, use_evidence, blind_keep, false, false)
+    }
+
+    pub fn configured(
+        view: &PlayerView,
+        rng: &mut dyn RngCore,
+        use_evidence: bool,
+        blind_keep: bool,
+        behavioral: bool,
+        call: bool,
+    ) -> Option<Self> {
         let me = view.me?;
         let n = view.all_seats.len();
         if !(2..=4).contains(&n) || me >= n || view.discard_ranks.len() != view.discard_count {
@@ -176,7 +249,7 @@ impl Sampler {
         {
             return None;
         }
-        let weights = evidence(view);
+        let weights = evidence(view, blind_keep, behavioral, call);
         let mut pool = RANK_COPIES;
         let mut cards = Vec::with_capacity(52);
         let mut unknown = Vec::new();
@@ -264,6 +337,11 @@ impl Sampler {
             round_scores: vec![0; n],
             score_reset_used: view.all_seats.iter().map(|s| s.score_reset_used).collect(),
             special_tactics: true,
+            blind_keep_evidence: blind_keep,
+            reset_policy_player: None,
+            behavioral_evidence: behavioral,
+            call_evidence: call,
+            value_model: None,
             penalty: view.cabo_penalty,
             target: view.target_score,
             public_hash: 0,
