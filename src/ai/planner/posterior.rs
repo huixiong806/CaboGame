@@ -128,7 +128,11 @@ fn evidence(view: &PlayerView) -> Vec<Vec<[f32; 14]>> {
                         hand[s as usize].known = (1 << n) - 1;
                     }
                 }
-                hand.push(new);
+                if *success {
+                    hand.insert(slots[0] as usize, new);
+                } else {
+                    hand.push(new);
+                }
             }
             _ => {}
         }
@@ -258,6 +262,7 @@ impl Sampler {
             extra,
             totals: view.all_seats.iter().map(|s| s.total_score).collect(),
             round_scores: vec![0; n],
+            score_reset_used: view.all_seats.iter().map(|s| s.score_reset_used).collect(),
             penalty: view.cabo_penalty,
             target: view.target_score,
             public_hash: 0,

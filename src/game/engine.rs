@@ -32,6 +32,7 @@ impl Session {
         }
         for p in &mut self.players {
             p.total_score = 0;
+            p.score_reset_used = false;
             p.peeked_slots.clear();
         }
         self.round_no = 0;
@@ -82,6 +83,8 @@ impl Session {
         // 每人 4 张暗牌（牌的 id 已随机对应点数，按序发牌即随机发牌）。
         let mut next_id = 0u16;
         for p in &mut self.players {
+            p.round_score = None;
+            p.score_reset_this_round = false;
             p.slots = (next_id..next_id + INITIAL_SLOTS as u16).collect();
             next_id += INITIAL_SLOTS as u16;
         }
@@ -536,7 +539,7 @@ impl Session {
             incoming: if source == Pile::Discard { Some(self.cards[taken as usize].card.rank) } else { None },
             success: all_success,
         });
-        // 手牌保持紧凑：换走的牌按槽位从大到小依次移除，获得的牌追加到末尾。
+        // 新牌留在第一个被选槽位；只压缩多张合并多出的空位，不重排其他牌。
         if all_success {
             for &s in selected.iter().rev() {
                 let old = self.players[pid].slots.remove(s as usize);
@@ -546,7 +549,7 @@ impl Session {
             }
             // 获得的牌暗置入手：K 不变（弃牌堆来源人人皆知，摸牌堆来源仅自己）。
             self.cards[taken as usize].revealed = false;
-            self.players[pid].slots.push(taken);
+            self.players[pid].slots.insert(selected[0] as usize, taken);
             let ranks_txt = ranks.iter().map(|r| r.to_string()).collect::<Vec<_>>().join(" ");
             if selected.len() == 1 {
                 match source {
@@ -575,7 +578,7 @@ impl Session {
                 self.log_public(
                     LogKind::Swap,
                     format!(
-                        "{name} 翻开槽位 {slots_txt}：{ranks_txt} —— 点数相同，交换成功！这些牌弃置，获得的牌加入手牌末尾"
+                        "{name} 翻开槽位 {slots_txt}：{ranks_txt} —— 点数相同，交换成功！新牌留在首个被选位置，其余空位压缩"
                     ),
                 );
             }
@@ -720,28 +723,26 @@ impl Session {
                 self.cards[*cid as usize].known_by = all.clone();
             }
         }
-        // 计算各家点数总和与本轮得分。
-        let sums: Vec<u32> = self
+        let hands: Vec<Vec<u8>> = self
             .players
             .iter()
-            .map(|p| p.slots.iter().map(|c| self.cards[*c as usize].card.rank as u32).sum())
+            .map(|p| p.slots.iter().map(|c| self.cards[*c as usize].card.rank).collect())
             .collect();
         let caller = self.cabo_caller;
         let penalty = self.settings.cabo_penalty;
-        let mut scores: Vec<u32> = sums.clone();
-        if let Some(c) = caller {
-            let others_min = sums
-                .iter()
-                .enumerate()
-                .filter(|(i, _)| *i != c)
-                .map(|(_, &v)| v)
-                .min()
-                .unwrap_or(u32::MAX);
-            scores[c] = if sums[c] < others_min { 0 } else { sums[c] + penalty };
-        }
+        let totals: Vec<u32> = self.players.iter().map(|p| p.total_score).collect();
+        let reset_used: Vec<bool> = self.players.iter().map(|p| p.score_reset_used).collect();
+        let result = super::scoring::settle(&hands, &totals, &reset_used, caller, penalty);
         for (i, p) in self.players.iter_mut().enumerate() {
-            p.round_score = Some(scores[i]);
-            p.total_score += scores[i];
+            p.round_score = Some(result.scores[i]);
+            p.total_score = result.totals[i];
+            p.score_reset_used = result.reset_used[i];
+            p.score_reset_this_round = result.reset_triggered[i];
+        }
+        if let Some(k) = result.high_pairs {
+            self.log_public(LogKind::Score, format!(
+                "✨ {} 达成高牌双对（两张 12、两张 13）：本轮得 0 分，其他玩家各得 50 分，覆盖普通 Cabo 计分", self.players[k].name
+            ));
         }
         // 亮牌明细日志。
         for i in 0..self.players.len() {
@@ -752,8 +753,10 @@ impl Session {
                 .collect::<Vec<_>>()
                 .join(" + ");
             let count = self.players[i].slot_count();
-            let extra = if Some(i) == caller {
-                if scores[i] == 0 {
+            let extra = if result.high_pairs.is_some() {
+                "，高牌双对计分".to_string()
+            } else if Some(i) == caller {
+                if result.scores[i] == 0 {
                     "，Cabo 成功 +0".to_string()
                 } else {
                     format!("，Cabo 未严格最低：+{penalty} 惩罚")
@@ -765,9 +768,15 @@ impl Session {
                 LogKind::Score,
                 format!(
                     "{}：{detail} = {}（{count} 张牌），本轮 +{}{}",
-                    self.players[i].name, sums[i], scores[i], extra
+                    self.players[i].name, result.sums[i], result.scores[i], extra
                 ),
             );
+            if result.reset_triggered[i] {
+                self.log_public(LogKind::Score, format!(
+                    "🎯 {} 凑满分：原累计 {} + 本轮 {} = 100 → 重置为 50（本大局唯一一次已使用）",
+                    self.players[i].name, totals[i], result.scores[i]
+                ));
+            }
         }
         // 判断游戏结束。
         let target = self.settings.target_score;

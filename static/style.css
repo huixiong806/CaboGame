@@ -159,6 +159,9 @@ input:focus, select:focus { border-color: var(--accent); }
 .tag.host { color: var(--gold); border-color: var(--gold); }
 .tag.vacant { color: var(--muted); }
 .tag.cabo { color: #fff; background: var(--danger); border-color: var(--danger); font-weight: 700; }
+.tag.reset, .tag.special { color: var(--gold); border-color: var(--gold); white-space: nowrap; }
+.tag.reset.used { color: var(--muted); border-color: var(--line); }
+.score-note { display: block; color: var(--gold); font-size: 11px; margin-top: 3px; }
 
 .host-tools { display: flex; flex-direction: column; gap: 10px; }
 .tool-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -186,7 +189,7 @@ input:focus, select:focus { border-color: var(--accent); }
 
 .layout { display: flex; gap: 14px; align-items: flex-start; }
 .layout .table { flex: 1; min-width: 0; }
-.side { width: 330px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+.side { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
 
 .table {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
@@ -195,6 +198,9 @@ input:focus, select:focus { border-color: var(--accent); }
 }
 
 .opponents { display: flex; gap: 12px; flex-wrap: wrap; }
+.opponents .seat { flex: 1 1 220px; min-width: 0; padding: 10px; }
+.cards.small { gap: 6px; }
+.cards.small .card-visibility { font-size: 9px; padding: 2px 3px; }
 
 .seat {
   background: var(--bg2); border: 1px solid var(--line);
@@ -216,6 +222,15 @@ input:focus, select:focus { border-color: var(--accent); }
 .cards { display: flex; gap: 8px; flex-wrap: wrap; align-content: flex-start; }
 .cards.small { min-height: 62px; }
 .cards.big-cards { min-height: 100px; }
+.hand-zone { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 18px; }
+.hand-slot { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.card-visibility {
+  font-size: 10px; line-height: 1.4; white-space: nowrap;
+  padding: 2px 5px; border-radius: 5px; border: 1px solid transparent;
+}
+.card-visibility.public { color: #5eead4; background: #123b3c; border-color: #246666; }
+.card-visibility.private { color: #d8b4fe; background: #302447; border-color: #584074; }
+.card-visibility.unknown { color: var(--muted); background: var(--panel); }
 /* 手牌可能超过 4 张（交换失败追加）：多牌时缩小卡牌保证可见 */
 .cards.big-cards.many { --card-w: 52px; }
 .cards.big-cards.many .card.big { width: var(--card-w); height: 74px; border-radius: 9px; }
@@ -286,9 +301,9 @@ form { display: contents; }
 .pile .card { width: 58px; height: 82px; }
 .pile-label { color: var(--muted); font-size: 12px; }
 
-.drawn-box { display: flex; align-items: center; gap: 12px; }
+.drawn-box { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .drawn-hint { color: var(--gold); font-weight: 600; font-size: 14px; }
-.drawn-box .card.big { width: 64px; height: 90px; transform: rotate(-4deg); }
+.drawn-box .card.big { width: 68px; height: 96px; outline: 2px dashed var(--gold); outline-offset: 3px; }
 
 .me-seat.spect {
   text-align: center; color: var(--muted);
@@ -308,6 +323,13 @@ form { display: contents; }
 .btn-col { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 .btn-col form { display: block; }
 .btn-col .btn { width: 100%; }
+.action-panel { background: var(--bg2); padding: 12px; }
+.action-panel .btn-col { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+.action-panel .btn-col form { flex: 1 1 150px; }
+.action-panel .btn-col .hint { flex-basis: 100%; margin: 0; }
+.action-panel .btn { min-height: 44px; }
+.action-panel .flash { margin: 0 0 10px; }
+.action-panel .btn.ghost { border-color: #50617e; }
 
 .score-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13.5px; }
 .score-table th { color: var(--muted); font-weight: 500; text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
@@ -339,6 +361,31 @@ form { display: contents; }
   .opponents { justify-content: center; }
   .center-row { justify-content: center; }
   .cards.big-cards { justify-content: center; }
+  .hand-zone { justify-content: center; }
+}
+
+@media (max-width: 520px) {
+  .stage { padding: 10px; }
+  .table { padding: 10px; gap: 12px; }
+  .seat.me { padding: 10px; }
+  .cards { gap: 6px; }
+  .opponents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .opponents .seat { padding: 8px; }
+  .cards.small { gap: 4px; }
+  .cards.small .hand-slot { flex: 0 0 calc((100% - 12px) / 4); min-width: 0; }
+  .cards.small .card { width: clamp(24px, 7vw, 30px); height: 44px; }
+  .cards.small .rank { font-size: 17px; }
+  .cards.small .pw { font-size: 7px; padding: 1px 2px; }
+  .cards.small .card-visibility { font-size: 8px; max-width: 100%; white-space: normal; text-align: center; }
+  .cards.big-cards .card.big { width: clamp(44px, 13.5vw, 54px); height: 78px; }
+  .cards.big-cards .card-visibility { font-size: 9px; padding: 2px 3px; }
+  .card.big .rank { font-size: 25px; }
+  .hand-zone { gap: 8px; }
+  .drawn-box .card.big { width: clamp(36px, 10.5vw, 44px); height: 70px; }
+  .drawn-hint { font-size: 11px; }
+  .action-panel .btn-col form { flex: 1 1 0; min-width: 0; }
+  .action-panel .btn { padding: 9px 6px; font-size: 12px; }
+  .status-strip { gap: 8px 12px; padding: 8px 10px; }
 }
 
 /* 记忆模式 */

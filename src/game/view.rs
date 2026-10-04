@@ -37,6 +37,8 @@ pub struct SlotView {
     /// UI 是否显示点数（公开信息常显；私有知识在记忆模式下隐藏）。
     pub shown: bool,
     pub revealed: bool,
+    /// 明置或全体玩家都知道点数；与本人能看到牌面是两回事。
+    pub publicly_known: bool,
     /// 我是否知道这张牌（用于交互可用性）。
     pub i_know: bool,
     /// 知道这张牌的人数（公共知识，人人都可见）。
@@ -74,6 +76,25 @@ impl SlotView {
     pub fn knows_badge(&self) -> bool {
         !self.shown && self.knower_count > 0
     }
+    pub fn visibility_label(&self) -> &'static str {
+        if self.publicly_known { "公开" }
+        else if self.i_know && self.knower_count == 1 { "仅你已知" }
+        else if self.knower_count > 0 { "部分人已知" }
+        else { "未知" }
+    }
+    pub fn visibility_class(&self) -> &'static str {
+        if self.publicly_known { "public" }
+        else if self.i_know { "private" }
+        else { "unknown" }
+    }
+    pub fn visibility_title(&self) -> String {
+        if self.revealed { "明置牌：所有玩家都能看到点数".into() }
+        else if self.publicly_known { "暗置牌，但所有玩家都已知道点数".into() }
+        else if self.knower_count > 0 {
+            let players = self.known_by.iter().map(|p| format!("P{}", p + 1)).collect::<Vec<_>>().join("、");
+            format!("暗置牌：仅 {players} 已知点数")
+        } else { "暗置牌：尚无人知道点数".into() }
+    }
 }
 
 fn rank_class_extra(rank: u8) -> &'static str {
@@ -93,6 +114,9 @@ pub struct SeatView {
     pub slots: Vec<SlotView>,
     pub total_score: u32,
     pub round_score: Option<u32>,
+    pub score_reset_used: bool,
+    pub score_reset_this_round: bool,
+    pub is_high_pairs: bool,
     pub is_current: bool,
     pub is_me: bool,
     pub is_caller: bool,
@@ -101,6 +125,9 @@ pub struct SeatView {
 impl SeatView {
     pub fn round_score_text(&self) -> String {
         self.round_score.map(|s| s.to_string()).unwrap_or_else(|| "—".into())
+    }
+    pub fn reset_label(&self) -> &'static str {
+        if self.score_reset_used { "重置已用" } else { "重置可用" }
     }
 }
 
@@ -390,7 +417,8 @@ pub fn project(session: &Session, viewer: Option<PlayerId>, host: PlayerId) -> P
             .map(|s| {
                 let cid = session.players[pid].slots[s as usize];
                 let cs = &session.cards[cid as usize];
-                let i_know = cs.is_known_to(viewer.unwrap_or(PlayerId::MAX));
+                let publicly_known = cs.revealed || cs.known_by.len() >= n;
+                let i_know = publicly_known || cs.is_known_to(viewer.unwrap_or(PlayerId::MAX));
                 let value = if i_know { Some(cs.card.rank) } else { None };
                 let revealed = cs.revealed;
                 let knower_count = cs.known_by.len();
@@ -409,6 +437,7 @@ pub fn project(session: &Session, viewer: Option<PlayerId>, host: PlayerId) -> P
                     value,
                     shown,
                     revealed,
+                    publicly_known,
                     i_know,
                     knower_count,
                     known_by: cs.known_by.iter().copied().collect(),
@@ -418,6 +447,11 @@ pub fn project(session: &Session, viewer: Option<PlayerId>, host: PlayerId) -> P
             .collect(),
         total_score: session.players[pid].total_score,
         round_score: session.players[pid].round_score,
+        score_reset_used: session.players[pid].score_reset_used,
+        score_reset_this_round: session.players[pid].score_reset_this_round,
+        is_high_pairs: session.players[pid].round_score.is_some() && super::scoring::is_high_pairs(
+            &session.players[pid].slots.iter().map(|&c| session.cards[c as usize].card.rank).collect::<Vec<_>>()
+        ),
         is_current: session.actor() == Some(pid),
         is_me,
         is_caller: session.cabo_caller == Some(pid),

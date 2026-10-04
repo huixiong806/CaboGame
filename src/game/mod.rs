@@ -7,6 +7,7 @@
 //! - 回合内行动 A（摸牌）/ B（交换）/ C（宣告 Cabo）互斥，每回合恰好执行一项。
 
 pub mod engine;
+pub mod scoring;
 pub mod sim;
 pub mod view;
 
@@ -107,7 +108,7 @@ pub enum Command {
     /// 行动 B（人类 UI 逐步）：把一张手牌加入/移出交换选择。
     SwapToggle { slot: SlotId },
     /// 行动 B：确认交换。单张必成功；多张同点数成功；否则失败（明置 + 追加新牌）。
-    /// 手牌始终保持紧凑：换走的牌移除、获得的牌追加到末尾。
+    /// 单张原位替换；多张成功后新牌位于首个被选槽位；失败追加新牌。
     SwapCommit,
     /// 组合命令（AI/测试用）：拿弃牌堆顶并与 `slots` 交换，一步到位。
     SwapOnce { slots: Vec<SlotId> },
@@ -158,7 +159,7 @@ pub struct PlayerState {
     pub bot_id: String,
     /// 真人玩家的会话令牌；AI / 空座位为 None。
     pub token: Option<String>,
-    /// 手牌（开局 4 张；交换后保持紧凑无空位，新牌追加到末尾；失败追加新牌可超过 4 张）。
+    /// 手牌（开局 4 张；成功交换保留首个被选位置并压缩空位；失败追加新牌可超过 4 张）。
     pub slots: Vec<CardId>,
     /// 初始查看阶段的人类 UI 暂存（点选中的槽位，凑满 2 个自动提交）。
     pub peeked_slots: Vec<SlotId>,
@@ -166,6 +167,10 @@ pub struct PlayerState {
     pub total_score: u32,
     /// 本轮得分（回合结束后填写，用于结算展示）。
     pub round_score: Option<u32>,
+    /// 每位玩家每大局一次的 100→50 重置是否已使用（公共信息）。
+    pub score_reset_used: bool,
+    /// 本轮结算是否触发了重置，仅用于结算说明。
+    pub score_reset_this_round: bool,
 }
 
 impl PlayerState {

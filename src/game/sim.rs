@@ -23,6 +23,8 @@ pub fn make_ai_session(seed: u64, settings: Settings, bot_ids: &[&str]) -> Sessi
             peeked_slots: Vec::new(),
             total_score: 0,
             round_score: None,
+            score_reset_used: false,
+            score_reset_this_round: false,
         })
         .collect();
     Session::new_lobby(seed, settings, players)

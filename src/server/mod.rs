@@ -113,6 +113,8 @@ pub fn create_room(shared: &Shared, host_name: String, settings: Settings) -> (A
         peeked_slots: Vec::new(),
         total_score: 0,
         round_score: None,
+        score_reset_used: false,
+        score_reset_this_round: false,
     };
     let session = Session::new_lobby(rand::rng().random(), settings, vec![host]);
     let room = Arc::new(Room {
@@ -156,6 +158,8 @@ pub fn join_room(shared: &Shared, code: &str, name: String) -> Result<(Arc<Room>
             peeked_slots: Vec::new(),
             total_score: 0,
             round_score: None,
+            score_reset_used: false,
+            score_reset_this_round: false,
         });
     } else {
         if inner.spectators.len() >= 8 {
@@ -360,6 +364,8 @@ pub fn apply_host_op(
                     peeked_slots: Vec::new(),
                     total_score: 0,
                     round_score: None,
+                    score_reset_used: false,
+                    score_reset_this_round: false,
                 });
             }
             HostOp::SeatToAI { seat } => {

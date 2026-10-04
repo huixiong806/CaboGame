@@ -25,6 +25,8 @@ fn human_session_with(n: usize, settings: Settings) -> Session {
             peeked_slots: Vec::new(),
             total_score: 0,
             round_score: None,
+            score_reset_used: false,
+            score_reset_this_round: false,
         })
         .collect();
     Session::new_lobby(42, settings, players)
@@ -100,6 +102,171 @@ fn idle_via_draw_discard(s: &mut Session, pid: usize) {
     s.apply(pid, &Command::DiscardDrawn { power: None }).unwrap();
 }
 
+fn settle_via_cabo(s: &mut Session, caller: usize) {
+    s.phase = Phase::Turn {
+        current: caller,
+        pending: None,
+    };
+    s.apply(caller, &Command::CallCabo).unwrap();
+    while let Phase::Turn { current, .. } = s.phase {
+        idle_via_draw_discard(s, current);
+    }
+}
+
+#[test]
+fn high_pairs_overrides_cabo_then_reset_runs_before_game_over() {
+    let mut s = human_session(3);
+    s.start_game().unwrap();
+    peek_all(&mut s);
+    force_hand(&mut s, 0, &[12, 13, 12, 13], &[]);
+    force_hand(&mut s, 1, &[0, 0, 1, 1], &[0]);
+    force_hand(&mut s, 2, &[2, 2, 3, 3], &[0, 1]);
+    for (p, total) in s.players.iter_mut().zip([70, 50, 49]) {
+        p.total_score = total;
+    }
+    let before = project(&s, Some(0), 0);
+    assert!(
+        !before.all_seats[0].is_high_pairs,
+        "未结算时不公开高牌双对组合信息"
+    );
+    settle_via_cabo(&mut s, 1); // 普通规则下宣告者严格最低，高牌双对仍覆盖其 0 分。
+    assert_eq!(
+        s.players.iter().map(|p| p.round_score).collect::<Vec<_>>(),
+        [Some(0), Some(50), Some(50)]
+    );
+    assert_eq!(
+        s.players.iter().map(|p| p.total_score).collect::<Vec<_>>(),
+        [70, 50, 99]
+    );
+    assert!(matches!(s.phase, Phase::RoundEnd));
+    let v = project(&s, Some(0), 0);
+    assert!(v.all_seats[0].is_high_pairs);
+    assert!(v.all_seats[1].score_reset_this_round);
+    assert!(v.all_seats[1].score_reset_used);
+    assert!(s.log.iter().any(|e| e.text.contains("高牌双对")));
+    assert!(s.log.iter().any(|e| e.text.contains("100 → 重置为 50")));
+    s.next_round().unwrap();
+    assert!(s.players[1].score_reset_used, "下一轮不能恢复资格");
+    assert!(s
+        .players
+        .iter()
+        .all(|p| p.round_score.is_none() && !p.score_reset_this_round));
+    assert!(!project(&s, Some(0), 0).all_seats[0].is_high_pairs);
+}
+
+#[test]
+fn high_pairs_applies_on_deck_exhaustion_and_extra_card_invalidates_it() {
+    for expanded in [false, true] {
+        let mut s = human_session(2);
+        s.start_game().unwrap();
+        peek_all(&mut s);
+        force_hand(&mut s, 0, &[13, 12, 13, 12], &[]);
+        force_hand(&mut s, 1, &[1, 1, 1, 1], &[0]);
+        if expanded {
+            let extra = s.deck.pop().unwrap();
+            s.players[0].slots.push(extra);
+        }
+        let expected_sum: u32 = s.players[0]
+            .slots
+            .iter()
+            .map(|&id| s.cards[id as usize].card.rank as u32)
+            .sum();
+        while !s.deck.is_empty() {
+            let actor = s.actor().unwrap();
+            idle_via_draw_discard(&mut s, actor);
+        }
+        assert!(matches!(s.phase, Phase::RoundEnd));
+        assert_eq!(s.cabo_caller, None);
+        assert_eq!(
+            s.players[0].round_score,
+            Some(if expanded { expected_sum } else { 0 })
+        );
+        assert_eq!(
+            s.players[1].round_score,
+            Some(if expanded { 4 } else { 50 })
+        );
+    }
+}
+
+#[test]
+fn failed_cabo_can_reset_and_win_the_match() {
+    for already_used in [false, true] {
+        let mut s = human_session(3);
+        s.start_game().unwrap();
+        peek_all(&mut s);
+        force_hand(&mut s, 0, &[5, 5, 0, 0], &[]);
+        force_hand(&mut s, 1, &[2, 2, 3, 4], &[0]);
+        force_hand(&mut s, 2, &[1, 1, 1, 1], &[0, 1]);
+        for (p, total) in s.players.iter_mut().zip([80, 90, 95]) {
+            p.total_score = total;
+        }
+        s.players[0].score_reset_used = already_used;
+        settle_via_cabo(&mut s, 0);
+        assert_eq!(s.players[0].round_score, Some(20));
+        assert_eq!(
+            s.players.iter().map(|p| p.total_score).collect::<Vec<_>>(),
+            [if already_used { 100 } else { 50 }, 101, 99]
+        );
+        assert_eq!(
+            s.phase,
+            Phase::GameOver {
+                winners: vec![if already_used { 2 } else { 0 }]
+            }
+        );
+        assert_eq!(s.players[0].score_reset_this_round, !already_used);
+        s.rematch().unwrap();
+        assert!(s
+            .players
+            .iter()
+            .all(|p| p.total_score == 0 && !p.score_reset_used && !p.score_reset_this_round));
+    }
+}
+
+#[test]
+fn two_player_successful_cabo_cannot_manufacture_reset_penalty() {
+    let mut s = human_session(2);
+    s.start_game().unwrap();
+    peek_all(&mut s);
+    force_hand(&mut s, 0, &[5, 5, 0, 0], &[]);
+    force_hand(&mut s, 1, &[2, 2, 3, 4], &[0]);
+    s.players[0].total_score = 80;
+    s.players[1].total_score = 90;
+    settle_via_cabo(&mut s, 0);
+    assert_eq!(s.players[0].round_score, Some(0));
+    assert_eq!(s.players[0].total_score, 80);
+    assert!(!s.players[0].score_reset_used);
+    assert_eq!(s.phase, Phase::GameOver { winners: vec![0] });
+}
+
+#[test]
+fn reset_boundary_precedes_configured_end_threshold() {
+    for (target, total, used, expected, end) in [
+        (100, 90, false, 50, false),
+        (100, 91, false, 101, true),
+        (100, 90, true, 100, true),
+        (60, 90, false, 50, false),
+        (50, 90, false, 50, true),
+    ] {
+        let mut s = human_session_with(
+            2,
+            Settings {
+                target_score: target,
+                ..Settings::default()
+            },
+        );
+        s.start_game().unwrap();
+        peek_all(&mut s);
+        force_hand(&mut s, 0, &[0, 0, 1, 1], &[]);
+        force_hand(&mut s, 1, &[2, 2, 3, 3], &[0]);
+        s.players[1].total_score = total;
+        s.players[1].score_reset_used = used;
+        settle_via_cabo(&mut s, 0);
+        assert_eq!(s.players[1].total_score, expected);
+        assert_eq!(s.players[1].score_reset_this_round, !used && total == 90);
+        assert_eq!(matches!(s.phase, Phase::GameOver { .. }), end);
+    }
+}
+
 #[test]
 fn deck_composition() {
     let mut s = human_session(3);
@@ -128,6 +295,8 @@ fn lobby_requires_ready_seats() {
         peeked_slots: Vec::new(),
         total_score: 0,
         round_score: None,
+        score_reset_used: false,
+        score_reset_this_round: false,
     });
     assert!(s.start_game().is_ok());
 }
@@ -193,6 +362,7 @@ fn swap_discard_single_card() {
     peek_all(&mut s);
     s.phase = Phase::Turn { current: 0, pending: None };
     let top = s.discard_top().unwrap();
+    let before = s.players[0].slots.clone();
     let old0 = s.players[0].slots[0];
     s.apply(0, &Command::BeginSwap).unwrap();
     // 弃牌堆来源可取消。
@@ -200,10 +370,10 @@ fn swap_discard_single_card() {
     s.apply(0, &Command::BeginSwap).unwrap();
     s.apply(0, &Command::SwapToggle { slot: 0 }).unwrap();
     s.apply(0, &Command::SwapCommit).unwrap();
-    // 紧凑手牌：槽位 0 的牌被移除，换入的牌追加到末尾。
+    // 单张原位替换，其余手牌不动。
     let hand = &s.players[0].slots;
     assert_eq!(hand.len(), 4);
-    assert_eq!(hand[3], top, "换入的牌追加到末尾");
+    assert_eq!(hand, &vec![top, before[1], before[2], before[3]]);
     assert!(!hand.contains(&old0), "原牌已换出");
     assert!(!s.cards[top as usize].revealed, "换入的牌面朝下");
     assert_eq!(s.cards[top as usize].known_by.len(), 2, "但来自弃牌堆，点数公开");
@@ -229,11 +399,12 @@ fn draw_then_swap_single_is_secret() {
     // 摸牌后不可取消（必须弃置或交换）。
     assert!(s.apply(0, &Command::Cancel).is_err());
     let old1 = s.players[0].slots[1];
+    let before = s.players[0].slots.clone();
     // 与槽位 1 的手牌交换（单张，必成功）。
     s.apply(0, &Command::DrawSwap { slots: vec![1] }).unwrap();
     let hand = &s.players[0].slots;
     assert_eq!(hand.len(), 4);
-    assert_eq!(hand[3], card, "换入的牌追加到末尾");
+    assert_eq!(hand, &vec![before[0], card, before[2], before[3]]);
     assert!(!hand.contains(&old1));
     assert!(!s.cards[card as usize].revealed);
     assert_eq!(s.cards[card as usize].known_by, [0usize].into_iter().collect(), "来自摸牌堆仅自己知道");
@@ -247,6 +418,7 @@ fn draw_then_swap_multi_success() {
     s.start_game().unwrap();
     peek_all(&mut s);
     force_hand(&mut s, 0, &[4, 4, 9, 9], &[]);
+    let before = s.players[0].slots.clone();
     s.phase = Phase::Turn { current: 0, pending: None };
     // 摸一张（摸牌堆顶强制为 6），然后与两张 4 交换 → 成功，手牌 4 → 3。
     let drawn = put_on_deck_top(&mut s, 6);
@@ -254,7 +426,7 @@ fn draw_then_swap_multi_success() {
     s.apply(0, &Command::DrawSwap { slots: vec![0, 1] }).unwrap();
     let hand = &s.players[0].slots;
     assert_eq!(hand.len(), 3, "两张换一张");
-    assert_eq!(hand[2], drawn, "换来的牌追加到末尾，无空位");
+    assert_eq!(hand, &vec![drawn, before[2], before[3]], "新牌保留首个被选位置，压缩多出的空位");
     // 换出的两张 4 在弃牌堆顶且公开。
     assert!(s.cards[*s.discard.last().unwrap() as usize].revealed);
     assert_eq!(s.cards[*s.discard.last().unwrap() as usize].card.rank, 4);
@@ -287,6 +459,48 @@ fn draw_then_swap_multi_failure_expands_hand() {
     assert!(!s.cards[secret as usize].revealed);
     assert_eq!(s.cards[secret as usize].known_by, [0usize].into_iter().collect());
     assert!(matches!(s.phase, Phase::Turn { current: 1, pending: None }));
+}
+
+#[test]
+fn non_adjacent_group_keeps_first_selected_position() {
+    let mut s = human_session(2);
+    s.start_game().unwrap();
+    peek_all(&mut s);
+    force_hand(&mut s, 0, &[2, 4, 9, 4], &[]);
+    let before = s.players[0].slots.clone();
+    let drawn = put_on_deck_top(&mut s, 6);
+    s.phase = Phase::Turn { current: 0, pending: None };
+    s.apply(0, &Command::BeginDraw).unwrap();
+    s.apply(0, &Command::DrawSwap { slots: vec![3, 1] }).unwrap();
+    assert_eq!(s.players[0].slots, vec![before[0], drawn, before[2]]);
+}
+
+#[test]
+fn visibility_distinguishes_private_shared_and_public_knowledge() {
+    let mut s = human_session(3);
+    s.start_game().unwrap();
+    peek_all(&mut s);
+    let cards = s.players[0].slots.clone();
+    s.cards[cards[1] as usize].known_by = [0, 1].into_iter().collect();
+    s.cards[cards[2] as usize].known_by = [0, 1, 2].into_iter().collect();
+    for memory_mode in [false, true] {
+        s.settings.memory_mode = memory_mode;
+        let own = project(&s, Some(0), 0).me_seat.unwrap().slots;
+        assert_eq!(own[0].visibility_label(), "仅你已知");
+        assert_eq!(own[1].visibility_label(), "部分人已知");
+        assert_eq!(own[2].visibility_label(), "公开");
+        assert!(!own[2].revealed, "来自弃牌堆的暗置牌也可以全员已知");
+        assert_eq!(own[0].shown, !memory_mode);
+        assert!(own[2].shown);
+        let other = project(&s, Some(2), 0).all_seats[0].slots.clone();
+        assert_eq!(other[0].value, None);
+        assert_eq!(other[1].value, None);
+        assert!(other[2].shown);
+        let spect = project(&s, None, 0).all_seats[0].slots.clone();
+        assert_eq!(spect[0].value, None);
+        assert_eq!(spect[1].value, None);
+        assert!(spect[2].shown);
+    }
 }
 
 #[test]
@@ -437,13 +651,15 @@ fn game_over_at_threshold_and_rematch() {
                 peeked_slots: Vec::new(),
                 total_score: 0,
                 round_score: None,
+                score_reset_used: false,
+                score_reset_this_round: false,
             })
             .collect(),
     );
     s.start_game().unwrap();
     peek_all(&mut s);
     force_hand(&mut s, 0, &[0, 0, 1, 1], &[]); // 2 分
-    force_hand(&mut s, 1, &[13, 13, 12, 12], &[0]); // 50 分 ≥ 20 → 游戏结束
+    force_hand(&mut s, 1, &[13, 13, 11, 12], &[0]); // 普通高分 49 ≥ 20；避开高牌双对组合。
     s.phase = Phase::Turn { current: 0, pending: None };
     s.apply(0, &Command::CallCabo).unwrap();
     idle_via_draw_discard(&mut s, 1);

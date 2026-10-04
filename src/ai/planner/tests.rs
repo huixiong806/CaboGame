@@ -45,6 +45,7 @@ fn exact_state(s: &Session) -> State {
         deck: s.deck.iter().map(|&c| c as u8).collect(),
         discard: s.discard.iter().map(|&c| c as u8).collect(),
         totals: s.players.iter().map(|p| p.total_score).collect(),
+        score_reset_used: s.players.iter().map(|p| p.score_reset_used).collect(),
         round_scores: s
             .players
             .iter()
@@ -70,6 +71,7 @@ fn assert_same(a: &State, b: &Session) {
     assert_eq!(a.deck, exp.deck);
     assert_eq!(a.discard, exp.discard);
     assert_eq!(a.totals, exp.totals);
+    assert_eq!(a.score_reset_used, exp.score_reset_used);
     assert_eq!(a.round_scores, exp.round_scores);
     assert_eq!(a.caller, exp.caller);
     assert_eq!(a.extra, exp.extra);
@@ -263,6 +265,137 @@ fn hidden_values_do_not_change_observation_policy_or_decision() {
             assert_ne!(a.observation_key(p), b.observation_key(p));
         }
     }
+}
+
+/// Build legal card containers with controlled hands and match totals.
+fn scoring_fixture(hands: &[Vec<u8>], totals: &[u32], used: &[bool]) -> Session {
+    let mut s = dealt(901, hands.len());
+    let mut pool: Vec<u16> = (0..52).collect();
+    for (p, ranks) in hands.iter().enumerate() {
+        s.players[p].slots = ranks
+            .iter()
+            .map(|&rank| {
+                let i = pool
+                    .iter()
+                    .position(|&id| s.cards[id as usize].card.rank == rank)
+                    .unwrap();
+                pool.remove(i)
+            })
+            .collect();
+        s.players[p].total_score = totals[p];
+        s.players[p].score_reset_used = used[p];
+    }
+    s.discard = vec![pool.pop().unwrap()];
+    s.deck = pool;
+    // These fixtures represent a fully observed state, not a secret oracle for decisions.
+    for card in &mut s.cards {
+        card.revealed = true;
+        card.known_by = (0..hands.len()).collect();
+    }
+    s.phase = Phase::Turn {
+        current: 0,
+        pending: None,
+    };
+    s
+}
+
+#[test]
+fn simulator_matches_special_settlements_and_terminal_utility() {
+    for n in 2..=4 {
+        for caller in 0..n {
+            for exhausted in [false, true] {
+                for used in [false, true] {
+                    let mut hands = vec![vec![1], vec![2], vec![3], vec![4]];
+                    hands.truncate(n);
+                    hands[0] = vec![13, 12, 13, 12];
+                    let mut s = scoring_fixture(&hands, &vec![50; n], &vec![used; n]);
+                    s.phase = Phase::Turn {
+                        current: caller,
+                        pending: None,
+                    };
+                    let mut fast = exact_state(&s);
+                    if !exhausted {
+                        s.apply(caller, &Command::CallCabo).unwrap();
+                        fast.apply(&Action::Cabo);
+                        assert_same(&fast, &s);
+                    }
+                    while let Some(actor) = s.actor() {
+                        s.apply(actor, &Command::BeginDraw).unwrap();
+                        fast.apply(&Action::Draw);
+                        assert_same(&fast, &s);
+                        s.apply(actor, &Command::DiscardDrawn { power: None })
+                            .unwrap();
+                        fast.apply(&Action::Discard(None));
+                        assert_same(&fast, &s);
+                    }
+                    assert_eq!(fast.round_scores[0], 0);
+                    assert!(fast.round_scores[1..].iter().all(|&v| v == 50));
+                    assert!(fast.totals[1..]
+                        .iter()
+                        .all(|&v| v == if used { 100 } else { 50 }));
+                    assert_eq!(matches!(s.phase, Phase::GameOver { .. }), used);
+                    let expected_utility = if used { 1.0 } else { 1.0 / n as f64 };
+                    assert!((fast.utility(0) - expected_utility).abs() < 1e-12);
+                }
+            }
+        }
+    }
+    for used in [false, true] {
+        let hands = vec![vec![5, 5, 0, 0], vec![2, 2, 3, 4], vec![1, 1, 1, 1]];
+        let mut s = scoring_fixture(&hands, &[80, 90, 95], &[used, false, false]);
+        let mut fast = exact_state(&s);
+        s.apply(0, &Command::CallCabo).unwrap();
+        fast.apply(&Action::Cabo);
+        while let Some(actor) = s.actor() {
+            s.apply(actor, &Command::BeginDraw).unwrap();
+            fast.apply(&Action::Draw);
+            s.apply(actor, &Command::DiscardDrawn { power: None })
+                .unwrap();
+            fast.apply(&Action::Discard(None));
+            assert_same(&fast, &s);
+        }
+        assert_eq!(fast.utility(0), if used { 0.0 } else { 1.0 });
+    }
+}
+
+#[test]
+fn reset_entitlement_survives_both_beliefs_and_changes_information_key() {
+    let mut s = dealt(903, 3);
+    let me = s.actor().unwrap();
+    s.players[1].score_reset_used = true;
+    let view = project(&s, Some(me), 0);
+    let mut rng = StdRng::seed_from_u64(77);
+    let sampler = Sampler::new(&view, &mut rng, false).unwrap();
+    assert_eq!(sampler.template.score_reset_used, [false, true, false]);
+    let old = crate::ai::belief::reconstruct(&view, &mut rng, &[0; 14]).unwrap();
+    assert_eq!(
+        old.players
+            .iter()
+            .map(|p| p.score_reset_used)
+            .collect::<Vec<_>>(),
+        [false, true, false]
+    );
+    let mut other = sampler.template.clone();
+    other.score_reset_used[1] = false;
+    assert_ne!(
+        other.observation_key(me),
+        sampler.template.observation_key(me)
+    );
+}
+
+#[test]
+fn replacement_evidence_follows_the_replaced_slot() {
+    let mut s = dealt(27, 3);
+    let p = s.actor().unwrap();
+    s.apply(p, &Command::BeginDraw).unwrap();
+    s.apply(p, &Command::DrawSwap { slots: vec![1] }).unwrap();
+    let view = project(&s, Some(s.actor().unwrap()), 0);
+    let sampler = Sampler::new(&view, &mut StdRng::seed_from_u64(91), true).unwrap();
+    let world = sampler.template;
+    let weights = |slot: usize| world.cards[world.hands[p][slot] as usize].log_weights;
+    assert!(weights(1).iter().any(|&w| w != 0.0), "保留新牌的行动证据跟随新牌");
+    assert_eq!(weights(2), [0.0; 14], "未选的未知牌不继承新牌证据");
+    assert_eq!(weights(3), [0.0; 14]);
 }
 
 #[test]

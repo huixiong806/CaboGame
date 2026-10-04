@@ -282,6 +282,8 @@ pub fn reconstruct(
             peeked_slots: Vec::new(),
             total_score: seat.total_score,
             round_score: None,
+            score_reset_used: seat.score_reset_used,
+            score_reset_this_round: false,
         });
     }
 

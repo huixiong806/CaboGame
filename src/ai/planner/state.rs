@@ -54,6 +54,7 @@ pub(super) struct State {
     pub discard: Vec<u8>,
     pub totals: Vec<u32>,
     pub round_scores: Vec<u32>,
+    pub score_reset_used: Vec<bool>,
     pub actor: usize,
     pub stage: Stage,
     pub caller: Option<usize>,
@@ -181,7 +182,11 @@ impl State {
                         ranks.iter().map(|&r| r as f32).sum(),
                     );
                 }
-                self.hands[p].push(taken);
+                if success {
+                    self.hands[p].insert(slots[0] as usize, taken);
+                } else {
+                    self.hands[p].push(taken);
+                }
                 self.event(PublicEvent::Exchange {
                     player: p,
                     source,
@@ -272,29 +277,18 @@ impl State {
         if self.stage == Stage::End {
             return;
         }
-        self.round_scores = self
+        let hands: Vec<Vec<u8>> = self
             .hands
             .iter()
-            .map(|h| {
-                h.iter()
-                    .map(|&id| self.cards[id as usize].rank as u32)
-                    .sum()
-            })
+            .map(|h| h.iter().map(|&id| self.cards[id as usize].rank).collect())
             .collect();
-        if let Some(c) = self.caller {
-            let min_other = (0..self.n())
-                .filter(|&p| p != c)
-                .map(|p| self.round_scores[p])
-                .min()
-                .unwrap();
-            self.round_scores[c] = if self.round_scores[c] < min_other {
-                0
-            } else {
-                self.round_scores[c] + self.penalty
-            };
-        }
+        let result = crate::game::scoring::settle(
+            &hands, &self.totals, &self.score_reset_used, self.caller, self.penalty,
+        );
+        self.round_scores = result.scores;
+        self.totals = result.totals;
+        self.score_reset_used = result.reset_used;
         for p in 0..self.n() {
-            self.totals[p] += self.round_scores[p];
             for &id in &self.hands[p] {
                 self.cards[id as usize].known = (1 << self.hands.len()) - 1;
                 self.cards[id as usize].revealed = true;
@@ -334,6 +328,7 @@ impl State {
             self.deck.len(),
             &self.extra,
             &self.totals,
+            &self.score_reset_used,
         )
             .hash(&mut h);
         for hand in &self.hands {
