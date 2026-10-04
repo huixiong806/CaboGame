@@ -187,7 +187,7 @@ pub fn leave_room(room: &Arc<Room>, viewer: Viewer) {
                 let name = inner.session.players[pid].name.clone();
                 let p = &mut inner.session.players[pid];
                 p.is_ai = true;
-                p.bot_id = "simple".into();
+                p.bot_id = "challenger".into();
                 p.token = None;
                 inner.session.log_public(
                     crate::game::LogKind::Info,
@@ -370,7 +370,7 @@ pub fn apply_host_op(
                     }
                     let tok = p.token.take();
                     p.is_ai = true;
-                    p.bot_id = "simple".into();
+                    p.bot_id = bots.default_id().into();
                     let name = p.name.clone();
                     (tok, name)
                 };

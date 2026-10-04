@@ -75,6 +75,7 @@ impl Session {
         self.discard.clear();
         self.cabo_caller = None;
         self.extra_turns.clear();
+        self.public_events.clear();
         self.peek_flash.clear();
         self.round_no += 1;
 
@@ -206,6 +207,7 @@ impl Session {
         let picks: Vec<(PlayerId, [SlotId; 2])> = done.iter().map(|(&k, &v)| (k, v)).collect();
         let names: Vec<String> = self.players.iter().map(|p| p.name.clone()).collect();
         for (i, slots) in &picks {
+            self.public_events.push(super::PublicEvent::InitialPeek { player: *i, slots: *slots });
             self.log_public(
                 LogKind::Peek,
                 format!("{} 查看了自己的槽位 {} 和 {}", names[*i], slots[0], slots[1]),
@@ -358,6 +360,9 @@ impl Session {
 
     /// 行动 A 收尾：把刚抽的牌公开进弃牌堆（能力已结算）。
     fn discard_drawn_public(&mut self, pid: PlayerId, card: CardId, powered: bool) {
+        self.public_events.push(super::PublicEvent::Discard {
+            player: pid, rank: self.cards[card as usize].card.rank, powered,
+        });
         let rank = self.rank_str(card);
         let name = self.players[pid].name.clone();
         self.cards[card as usize].revealed = true;
@@ -424,6 +429,7 @@ impl Session {
             }
             _ => return Err(GameError::Invalid("能力与目标不匹配")),
         }
+        self.public_events.push(super::PublicEvent::Power { player: pid, power: pu });
         Ok(())
     }
 
@@ -525,6 +531,11 @@ impl Session {
             .collect();
 
         let all_success = selected.len() == 1 || ranks.iter().all(|&r| r == ranks[0]);
+        self.public_events.push(super::PublicEvent::Exchange {
+            player: pid, source, slots: selected.clone(), exposed: ranks.clone(),
+            incoming: if source == Pile::Discard { Some(self.cards[taken as usize].card.rank) } else { None },
+            success: all_success,
+        });
         // 手牌保持紧凑：换走的牌按槽位从大到小依次移除，获得的牌追加到末尾。
         if all_success {
             for &s in selected.iter().rev() {
@@ -541,15 +552,22 @@ impl Session {
                 match source {
                     Pile::Discard => {
                         let tr = self.rank_str(taken);
+                        let out_txt =
+                            ranks.iter().map(|r| r.to_string()).collect::<Vec<_>>().join(" ");
+                        // 换出的牌是正面朝上进入弃牌堆的（引擎里已标 revealed/known_by=全体），
+                        // 属于公开信息 —— 必须写进日志，否则只有"当下看一眼堆顶"才能知道，
+                        // 而 AI 只在自己决策点拿视图，会被后续动作压掉。
                         self.log_public(
                             LogKind::Swap,
-                            format!("{name} 用槽位 {slots_txt} 的牌换入弃牌堆顶的 {tr}"),
+                            format!("{name} 亮出槽位 {slots_txt} 的 {out_txt}，换入弃牌堆顶的 {tr}"),
                         );
                     }
                     Pile::Draw => {
+                        let out_txt =
+                            ranks.iter().map(|r| r.to_string()).collect::<Vec<_>>().join(" ");
                         self.log_public(
                             LogKind::Swap,
-                            format!("{name} 把刚摸的牌与槽位 {slots_txt} 交换"),
+                            format!("{name} 把刚摸的牌与槽位 {slots_txt} 交换，亮出 {out_txt}"),
                         );
                     }
                 }
@@ -623,6 +641,7 @@ impl Session {
             return Err(GameError::Invalid("本轮已有人宣告 Cabo"));
         }
         self.cabo_caller = Some(pid);
+        self.public_events.push(super::PublicEvent::Cabo { player: pid });
         // 从宣告者的下一位开始，其余每人再加时一回合（加时中不能再宣告）。
         let n = self.players.len();
         let mut queue = VecDeque::new();

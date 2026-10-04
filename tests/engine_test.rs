@@ -122,7 +122,7 @@ fn lobby_requires_ready_seats() {
     s.players.push(PlayerState {
         name: "AI".into(),
         is_ai: true,
-        bot_id: "simple".into(),
+        bot_id: "challenger".into(),
         token: None,
         slots: Vec::new(),
         peeked_slots: Vec::new(),
@@ -491,7 +491,7 @@ fn bot_games_run_to_completion() {
     let registry = BotRegistry::with_builtins();
     for seed in 1..=8u64 {
         let mut s =
-            make_ai_session(seed, Settings::default(), &["simple", "simple", "simple", "simple"]);
+            make_ai_session(seed, Settings::default(), &["challenger", "challenger", "challenger", "challenger"]);
         let mut rng = StdRng::seed_from_u64(seed.wrapping_mul(7919));
         let outcome = run_game(&mut s, &registry, &mut rng, 50_000)
             .unwrap_or_else(|e| panic!("seed {seed}: {e}"));
@@ -505,7 +505,7 @@ fn bot_games_run_to_completion() {
 fn two_player_bot_games_run_to_completion() {
     let registry = BotRegistry::with_builtins();
     for seed in 11..=14u64 {
-        let mut s = make_ai_session(seed, Settings::default(), &["simple", "simple"]);
+        let mut s = make_ai_session(seed, Settings::default(), &["challenger", "challenger"]);
         let mut rng = StdRng::seed_from_u64(seed.wrapping_mul(104729));
         run_game(&mut s, &registry, &mut rng, 50_000).unwrap_or_else(|e| panic!("seed {seed}: {e}"));
     }

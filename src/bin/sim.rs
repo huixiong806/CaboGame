@@ -32,7 +32,7 @@ fn main() {
     }
 
     let registry = BotRegistry::with_builtins();
-    let bot_ids: Vec<&str> = (0..players).map(|_| "simple").collect();
+    let bot_ids: Vec<&str> = (0..players).map(|_| "challenger").collect();
     let names: Vec<String> = (0..players).map(|i| format!("P{}", i + 1)).collect();
 
     let t0 = std::time::Instant::now();

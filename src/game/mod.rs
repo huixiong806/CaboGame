@@ -68,7 +68,7 @@ pub fn power_kind_of(rank: u8) -> Option<PowerKind> {
 }
 
 /// 能力的具体目标（在行动 A 弃置时随命令一次性提交）。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PowerUse {
     PeekOwn { slot: SlotId },
     Spy { player: PlayerId, slot: SlotId },
@@ -76,7 +76,7 @@ pub enum PowerUse {
 }
 
 /// 换入来源：弃牌堆顶 / 摸牌堆顶（交换行动用）。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Pile {
     Draw,
     Discard,
@@ -228,6 +228,25 @@ pub struct LogEntry {
     pub text: String,
 }
 
+/// Typed public history for decision programs. No physical card IDs or secret ranks.
+/// Reset each round; initial choices are published only after everyone has submitted.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum PublicEvent {
+    InitialPeek { player: PlayerId, slots: [SlotId; 2] },
+    Power { player: PlayerId, power: PowerUse },
+    Discard { player: PlayerId, rank: u8, powered: bool },
+    Exchange {
+        player: PlayerId,
+        source: Pile,
+        slots: Vec<SlotId>,
+        exposed: Vec<u8>,
+        /// Known only for discard-pile acquisitions, never for secret draws.
+        incoming: Option<u8>,
+        success: bool,
+    },
+    Cabo { player: PlayerId },
+}
+
 /// 一整局游戏（可能包含多轮）。
 #[derive(Clone, Debug)]
 pub struct Session {
@@ -250,6 +269,7 @@ pub struct Session {
     /// 最近一次秘密查看的闪显（记忆模式下展示一次）；随该玩家下一次行动清除。
     pub peek_flash: BTreeMap<PlayerId, String>,
     pub log: Vec<LogEntry>,
+    pub public_events: Vec<PublicEvent>,
 }
 
 impl Session {
@@ -270,6 +290,7 @@ impl Session {
             extra_turns: VecDeque::new(),
             peek_flash: BTreeMap::new(),
             log: Vec::new(),
+            public_events: Vec::new(),
         }
     }
 

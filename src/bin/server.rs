@@ -32,6 +32,7 @@ async fn main() {
         .await
         .unwrap_or_else(|e| panic!("无法绑定端口 {port}: {e}"));
     tracing::info!("Cabo 服务已启动: http://localhost:{port}");
+    tracing::info!("AI 组件: {}", cabo::ai::learned_status());
     if let Err(e) = axum::serve(listener, app).await {
         tracing::error!("服务退出: {e}");
     }
