@@ -1,0 +1,74 @@
+{
+  "version": "1.0.0",
+  "source_commit": "0e0c5460c67ae6e6e488c99a6ce2c9e303d59378",
+  "source_dirty": true,
+  "binary_sha256": "6ce9a3756bf00349d73ab766966745c75aed3dd4a4c1b2813a26c86441f1750e",
+  "model_sha256": "f41dedda1ab25df3b0f7692807724831a89dffdd9118fa05d55f8fb6ecd96fc8",
+  "players": 2,
+  "blocks_per_pair": 64,
+  "games_per_pair": 128,
+  "seed": 2026100501,
+  "jobs": 4,
+  "configuration_overrides": [],
+  "cabo_environment_variables": [],
+  "planned_pairs": [
+    [
+      "hard",
+      "normal"
+    ],
+    [
+      "hard",
+      "easy"
+    ],
+    [
+      "normal",
+      "easy"
+    ]
+  ],
+  "platform": "nt",
+  "started_at": "2026-10-05 19:12:03 +0800",
+  "hardware": "Intel Core i7-12700H (14 cores / 20 logical processors), Windows x64",
+  "decision_defaults": {
+    "easy": {
+      "budget_us": 300000,
+      "max_worlds": 2048
+    },
+    "normal": {
+      "budget_us": 300000,
+      "simulations": 4096,
+      "confirmation_samples": 48
+    },
+    "hard": {
+      "budget_us": 600000,
+      "simulations": 8192,
+      "confirmation_samples": 96,
+      "value_model": "models/hard-value-v1.bin",
+      "default_champion": true
+    }
+  },
+  "source_ai_game_sha256": {
+    "src/ai/belief.rs": "e91327ed4d32f845ae08dc1004f1dd65badb9fd59ba4154fdc80e73d2d65451e",
+    "src/ai/history.rs": "93d0b1ac50b7642d2e7b5189e66d60281fb552dab99c54cefc803c17077aa139",
+    "src/ai/mod.rs": "2601a534ad7ec8786f98698534239464be2c869fc44793c1d5a82a2ad9bb5559",
+    "src/ai/nn.rs": "3148a054051038de1f253e0b08d8844436a3618ee44e95ccf0449ccb0efae1d2",
+    "src/ai/planner/action_policy.rs": "0b8d1bf70d5dcd7a3d3b41a5b40c3d3685e8e8f6eaa78f62e532fd73cdbd7da0",
+    "src/ai/planner/match_value.rs": "25ad426165e97681243feb8af2ba6d25a6cf030949cd32691cc0b0f1b26d8743",
+    "src/ai/planner/mod.rs": "9d9924f7f80c0dad49f04dc1f072c17d943b721daab8ce1d5fa926b533e826c2",
+    "src/ai/planner/policy.rs": "f046fb8a68166ab0dd4b274dd9bc54e9c40f0ef022c7ef713cf4a703d74d29a7",
+    "src/ai/planner/posterior.rs": "1f1767e7d57cf3afd467d7eb47b6be25ae608db4885f3199c101afdf0305c7f7",
+    "src/ai/planner/racing.rs": "793307d965880f3863921c52867b848aac0333b71904976e513c95411c3c3ec5",
+    "src/ai/planner/special.rs": "85822cc15bcec720fec814452382534e1b5d32a8f48bdb6b395025684943a869",
+    "src/ai/planner/state.rs": "19471740db74665a5df13ad96618f267f00b94e35f33401bc96893474fe90841",
+    "src/ai/planner/tests.rs": "e1681c01cddf0d856ecabd1d8389f9a7b6e3e018b12d3696d9e38765344e6e24",
+    "src/ai/policy.rs": "c71738212c35a41f0155ce98ec5082134576fff4147ad3c56eecfc4ef7902ef5",
+    "src/ai/search.rs": "ad3f0f1fc3934b1afe56edec0d22e1739fcfbeb8009f87a93baeb9aefe53852d",
+    "src/ai/tactics.rs": "b07621906a4139019755228d7831a7cb4ec648c13da975c0f160dbd22ce5c448",
+    "src/ai/value.rs": "447816b196cd5a3f46cfc71db2b51b96ff4c608b37d0d7b6ca93e88e54179be2",
+    "src/ai/weights.rs": "9a22319f193a7944756b045d94e166aac96bbd07e679526b9830c0cfafc35843",
+    "src/game/engine.rs": "c76f15190a7a4ef69d7ba9d7848a7a35bfd950e9968b42a6139cd77f35732438",
+    "src/game/mod.rs": "8781df711d1049afc38fe029a3dc460687706938207db2a63c1e771f24a60203",
+    "src/game/scoring.rs": "1482e7deb966e9058e25d3e89459a85f712bbd26e12625f93e22654b90455098",
+    "src/game/sim.rs": "ea3beeac431714e1e3d02c892a4f8c2c83a74a3378ef968661aef63ec99f8688",
+    "src/game/view.rs": "cc24ec25c819226b78ee2d17e534447c8b720311cdf09ad7bc7c632bccfb594e"
+  }
+}

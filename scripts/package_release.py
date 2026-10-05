@@ -1,4 +1,4 @@
-"""Build a Windows playable archive from a clean source revision and static-CRT executable."""
+"""Build a Windows playable archive, or an explicitly marked local preview."""
 import argparse
 import hashlib
 import json
@@ -49,13 +49,21 @@ def windows_imports(raw):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--exe", required=True)
-    parser.add_argument("--out", default="research/artifacts/releases/CaboGame-Windows-x64.zip")
+    parser.add_argument("--out", help="new archive path inside research/artifacts")
+    parser.add_argument("--preview", action="store_true", help="allow uncommitted source for local review")
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    if subprocess.check_output(["git", "status", "--porcelain"], cwd=root).strip():
-        raise ValueError("commit the source before packaging")
+    dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=root).strip())
+    if dirty and not args.preview:
+        raise ValueError("source has uncommitted changes; use --preview for local review")
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
-    output = (root / args.out).resolve()
+    metadata = json.loads(subprocess.check_output(
+        ["cargo", "metadata", "--locked", "--format-version", "1"], cwd=root, text=True, encoding="utf-8"
+    ))
+    version = next(p["version"] for p in metadata["packages"] if p["name"] == "cabo")
+    label = "v" + (version[:-2] if version.endswith(".0") else version)
+    suffix = "-preview" if args.preview else ""
+    output = (root / (args.out or f"research/artifacts/releases/CaboGame-{label}-Windows-x64{suffix}.zip")).resolve()
     if not output.is_relative_to(root / "research/artifacts") or output.exists():
         raise ValueError("choose a new output inside research/artifacts")
     executable = (root / args.exe).read_bytes()
@@ -74,19 +82,33 @@ def main():
         'cabo-server.exe\r\npause\r\n'
     ).encode("ascii")
     payload["README.txt"] = (
-        "CaboGame Windows x64\n\n"
+        f"CaboGame {label} Windows x64{' · 本地预览版' if args.preview else ''}\n"
+        "© 2026 orangebird\n\n"
         "解压到任意目录，双击 start.cmd，浏览器访问 http://localhost:8080。\n"
         "默认 Hard 模型已包含，无需 Rust、Python、GPU 或训练。\n"
         "创建房间后可以添加 AI；朋友可通过主机的局域网地址加入。\n"
         "如网页打开过早，请刷新。按 Ctrl+C 停止服务。\n"
         "换端口：在终端设置 PORT 后运行 cabo-server.exe。\n\n"
-        f"源码版本：{revision}\n"
+        f"源码基准：{revision}\n"
+        f"本地修改：{'有（尚未提交）' if dirty else '无'}；构建详情见 BUILD.json 与 SOURCE.json。\n"
         "项目：https://github.com/huixiong806/CaboGame\n"
         "许可：MIT；第三方许可见 THIRD_PARTY_NOTICES.md 与 licenses/。\n"
     ).encode("utf-8")
-    metadata = json.loads(subprocess.check_output(
-        ["cargo", "metadata", "--locked", "--format-version", "1"], cwd=root, text=True, encoding="utf-8"
-    ))
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    if "\n### 发布版对战\n" in readme:
+        benchmark = readme.split("\n### 发布版对战\n", 1)[1].split("\n## ", 1)[0].strip()
+        benchmark = benchmark.replace("research/reports/", "benchmarks/")
+        payload["README.txt"] += ("\nAI 发布版对战\n\n" + benchmark + "\n").encode("utf-8")
+        for path in sorted((root / "research/reports").glob("V1_RELEASE_*")):
+            if path.is_file() and path.suffix in {".md", ".json", ".tsv", ".txt"}:
+                payload[f"benchmarks/{path.name}"] = path.read_bytes()
+    names = subprocess.check_output(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=root
+    ).decode("utf-8").split("\0")
+    source = {name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+              for name in sorted(set(names)) if name and (root / name).is_file()}
+    source_json = json.dumps(source, ensure_ascii=False, sort_keys=True, indent=2).encode("utf-8")
+    payload["SOURCE.json"] = source_json
     dependencies = []
     for package in metadata["packages"]:
         if package["name"] == "cabo":
@@ -98,7 +120,10 @@ def main():
                 payload[f"licenses/{package['name']}-{package['version']}/{path.name}"] = path.read_bytes()
     payload["licenses/dependencies.json"] = json.dumps(dependencies, ensure_ascii=False, indent=2).encode("utf-8")
     payload["BUILD.json"] = json.dumps({
-        "source_commit": revision, "platform": "windows-x86_64", "imports": imports,
+        "version": version, "copyright": "© 2026 orangebird", "preview": args.preview,
+        "source_commit": revision, "source_dirty": dirty,
+        "source_manifest_sha256": hashlib.sha256(source_json).hexdigest(),
+        "platform": "windows-x86_64", "imports": imports,
         "model_sha256": MODEL_SHA256, "binary_sha256": hashlib.sha256(executable).hexdigest(),
     }, indent=2).encode("utf-8")
     payload["SHA256SUMS"] = "".join(

@@ -1,0 +1,76 @@
+{
+  "version": "1.0.0",
+  "total_games": 384,
+  "t_critical_df63": 1.9983405425207934,
+  "results": [
+    {
+      "candidate": "hard",
+      "opponent": "normal",
+      "blocks": 64,
+      "games": 128,
+      "win_share": 0.578125,
+      "opponent_win_share": 0.421875,
+      "win_descriptive_95_interval": [
+        0.4560981205252726,
+        0.6913040633854843
+      ],
+      "mean_score_gap": -2.40625,
+      "score_gap_95_interval": [
+        -8.462534252677381,
+        3.650034252677381
+      ],
+      "decision_mean_ms": 201.28762137744926,
+      "decision_max_ms": 461.949,
+      "elapsed_seconds": 626.1,
+      "illegal_commands": 0,
+      "tsv_sha256": "57bcbe8f4273d9699022f0346a72747d175a96220e9437c0a87620759e8f922b",
+      "raw_output_sha256": "dd643ea754e26c49bdef39ef5ab892f0f3499c1120112a8dbd7f8502a14ba284"
+    },
+    {
+      "candidate": "hard",
+      "opponent": "easy",
+      "blocks": 64,
+      "games": 128,
+      "win_share": 0.859375,
+      "opponent_win_share": 0.140625,
+      "win_descriptive_95_interval": [
+        0.7538349160536257,
+        0.9242151299358556
+      ],
+      "mean_score_gap": -41.296875,
+      "score_gap_95_interval": [
+        -47.150916789186034,
+        -35.442833210813966
+      ],
+      "decision_mean_ms": 184.99366490233146,
+      "decision_max_ms": 443.839,
+      "elapsed_seconds": 878.1,
+      "illegal_commands": 0,
+      "tsv_sha256": "6815a78b48aec16aa75caa0230f785be100e0ea3620dee2778880babaf0d41c3",
+      "raw_output_sha256": "b01f1526bdbc84ccdec781facd0ccb68b7ec413569793d9f1accaee8a42d80db"
+    },
+    {
+      "candidate": "normal",
+      "opponent": "easy",
+      "blocks": 64,
+      "games": 128,
+      "win_share": 0.828125,
+      "opponent_win_share": 0.171875,
+      "win_descriptive_95_interval": [
+        0.7178655850983409,
+        0.9012235873268377
+      ],
+      "mean_score_gap": -42.4765625,
+      "score_gap_95_interval": [
+        -49.01685079213272,
+        -35.93627420786728
+      ],
+      "decision_mean_ms": 83.23783132691278,
+      "decision_max_ms": 220.018,
+      "elapsed_seconds": 655.0,
+      "illegal_commands": 0,
+      "tsv_sha256": "31483b6d9146aa8526b311cb3d82c4e62ce83ec76a8b824d4a217e5154b92fad",
+      "raw_output_sha256": "6e0e2f80609339034f63caa9e14d0084ea7f5a9e3c633143eebcde8cf9365e62"
+    }
+  ]
+}

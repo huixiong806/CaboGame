@@ -1,6 +1,6 @@
 [package]
 name = "cabo"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 description = "Cabo 卡牌游戏：Rust 服务端 + 无 JS 的 HTMX 网页客户端"
 license = "MIT"
