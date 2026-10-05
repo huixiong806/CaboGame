@@ -1,7 +1,7 @@
 """Deep Sets residual match-value network, NumPy/Adam, real-engine Monte Carlo labels.
 
 Rows from a match are correlated: input files must use disjoint seed ranges.
-Models and datasets belong under ignored data/, never in Git.
+Models and datasets belong under ignored research/artifacts/data/, never in Git.
 """
 import argparse
 import hashlib
@@ -165,7 +165,7 @@ def report(p, d, probs=None):
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument('--train',required=True); ap.add_argument('--validation',required=True); ap.add_argument('--test',required=True)
-    ap.add_argument('--out',default='data/match_value/model.bin'); ap.add_argument('--report',default='reports/MATCH_VALUE_LEARNING.json')
+    ap.add_argument('--out',default='research/artifacts/data/match_value/model.bin'); ap.add_argument('--report',default='research/reports/MATCH_VALUE_LEARNING.json')
     ap.add_argument('--epochs',type=int,default=45); ap.add_argument('--seed',type=int,default=2718)
     ap.add_argument('--extra-train'); ap.add_argument('--extra-validation'); ap.add_argument('--extra-test')
     ap.add_argument('--extra-weight',type=float,default=.5); ap.add_argument('--init-model')

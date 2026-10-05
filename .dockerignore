@@ -1,0 +1,5 @@
+.git
+target
+research/artifacts
+*.log
+__pycache__

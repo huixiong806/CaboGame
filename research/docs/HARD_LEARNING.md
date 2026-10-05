@@ -1,3 +1,5 @@
+> 归档文档：保留当时的方案、默认配置与结论。当前版本见 [项目 README](../../README.md)，路径和复现说明见 [研究索引](../README.md)。
+
 # Hard 的学习与搜索实验
 
 Normal 保持 `3d6f668` 的默认决策，Hard 的候选通过显式配置进入评估，也可通过 `CABO_HARD_VALUE_MODEL` 在本机网页中试用。模型、训练样本、可执行文件全部保存在忽略的 `data/`、`target/`，不能加入 Git。是否晋升以独立整场对局结果为准，预测误差下降不能单独作为棋力证明。
@@ -35,10 +37,10 @@ cargo build --release --bin cabo-match-data --bin cabo-eval
 target/release/cabo-match-data.exe --games 18000 --seed 220000 --jobs 4 --out data/match_value/train.tsv
 target/release/cabo-match-data.exe --games 4000 --seed 240000 --jobs 4 --out data/match_value/validation.tsv
 target/release/cabo-match-data.exe --games 4000 --seed 260000 --jobs 4 --out data/match_value/test.tsv
-python tools/train_match_value.py --train data/match_value/train.tsv --validation data/match_value/validation.tsv --test data/match_value/test.tsv --epochs 45 --out data/match_value/model-v1.bin --report reports/MATCH_VALUE_V1_LEARNING.json
+python research/tools/train_match_value.py --train data/match_value/train.tsv --validation data/match_value/validation.tsv --test data/match_value/test.tsv --epochs 45 --out data/match_value/model-v1.bin --report research/reports/MATCH_VALUE_V1_LEARNING.json
 
 # 显式开启学习价值；Normal 对照保持冻结策略
-target/release/cabo-eval.exe --candidate hard --compare normal --opponents challenger --players 4 --blocks 40 --jobs 4 --seed 280000 --cfg budget_us=0,simulations=128,confirmation_samples=48,learned_value=true,value_model_path=data/match_value/model-v1.bin --compare-cfg budget_us=0,simulations=128,confirmation_samples=48 --out reports/value-eval.tsv
+target/release/cabo-eval.exe --candidate hard --compare normal --opponents challenger --players 4 --blocks 40 --jobs 4 --seed 280000 --cfg budget_us=0,simulations=128,confirmation_samples=48,learned_value=true,value_model_path=data/match_value/model-v1.bin --compare-cfg budget_us=0,simulations=128,confirmation_samples=48 --out research/reports/value-eval.tsv
 
 # 独立语言实现的预测一致性，以及完整搜索的信息隔离检查
 $env:CABO_MATCH_VALUE_TEST='data/match_value/model-v2.bin'
@@ -53,7 +55,7 @@ cargo test --release --lib learned_search_uses_only_legal_information -- --ignor
 本机已有 `D:\miniconda3\envs\py311\python.exe`，PyTorch 2.9.1+cu128，可使用 RTX 3060 Laptop GPU（6 GB）。直接复用，不另建环境：
 
 ```powershell
-D:/miniconda3/envs/py311/python.exe tools/train_match_value_gpu.py --train data/match_value/train-v2.tsv --validation data/match_value/validation-v2.tsv --test data/match_value/test-v2.tsv --epochs 25 --batch-size 512 --out data/match_value/model-v2-gpu.bin --report reports/MATCH_VALUE_V2_GPU_LEARNING.json
+D:/miniconda3/envs/py311/python.exe research/tools/train_match_value_gpu.py --train data/match_value/train-v2.tsv --validation data/match_value/validation-v2.tsv --test data/match_value/test-v2.tsv --epochs 25 --batch-size 512 --out data/match_value/model-v2-gpu.bin --report research/reports/MATCH_VALUE_V2_GPU_LEARNING.json
 ```
 
 此次 GPU 训练耗时 137.8 秒；CUDA 与 NumPy 概率最大误差约 `2.16e-7`，导出模型也通过 Rust 推理检查。没有记录等条件 CPU 耗时，因此不声称实测速比。模拟比赛采集仍主要消耗 CPU。GPU 训练器支持 `--init-model` 与 `--extra-train/validation/test`，按整场比赛均衡采样两个策略域；验证集也按指定域权重选模型，初始模型作为 epoch 0 参与选择，独立测试不参与选择。
@@ -63,7 +65,7 @@ V3 是一次自我对弈价值迭代：全部座位使用 V2 搜索，`budget_us
 V3 从 V2 开始，等权混合原快策略与自我对弈域，25 epoch、每 epoch 65,536 样本、batch 1,024、学习率 0.0003，按 seed 排序；GPU 训练耗时 12.8 秒。该采样量与 V2 重训不同，不能据此比较训练速度。
 
 ```powershell
-D:/miniconda3/envs/py311/python.exe tools/train_match_value_gpu.py --train data/match_value/train-v2.tsv --validation data/match_value/validation-v2.tsv --test data/match_value/test-v2.tsv --extra-train data/match_value/search-train-v3.tsv --extra-validation data/match_value/search-validation-v3.tsv --extra-test data/match_value/search-test-v3.tsv --extra-weight 0.5 --init-model data/match_value/model-v2.bin --samples-per-epoch 65536 --batch-size 1024 --epochs 25 --lr 0.0003 --sort-seeds --out data/match_value/model-v3-gpu.bin --report reports/MATCH_VALUE_V3_GPU_LEARNING.json
+D:/miniconda3/envs/py311/python.exe research/tools/train_match_value_gpu.py --train data/match_value/train-v2.tsv --validation data/match_value/validation-v2.tsv --test data/match_value/test-v2.tsv --extra-train data/match_value/search-train-v3.tsv --extra-validation data/match_value/search-validation-v3.tsv --extra-test data/match_value/search-test-v3.tsv --extra-weight 0.5 --init-model data/match_value/model-v2.bin --samples-per-epoch 65536 --batch-size 1024 --epochs 25 --lr 0.0003 --sort-seeds --out data/match_value/model-v3-gpu.bin --report research/reports/MATCH_VALUE_V3_GPU_LEARNING.json
 ```
 
 研究开关均默认关闭：`root_racing` 用共同世界比较根动作，`racing_actions` 控制观察信息筛选的候选数；`blind_keep_evidence`、`behavioral_evidence`、`call_evidence` 使用公开行为的软似然；`validate_calls` 复核原快策略的普通宣告；`match_cabo` 允许可靠的整局赢家宣告；`probabilistic_reset` 是已出现回归的概率重置奖励消融。`min_cabo_success=0` 可以研究用整局价值选择宣告的路线，仍需独立确认其相对摸牌的收益。

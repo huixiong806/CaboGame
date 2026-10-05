@@ -42,6 +42,8 @@ fn repeated_public_cycle(view: &PlayerView) -> bool {
 
 #[derive(Clone, Debug)]
 pub struct PlannerCfg {
+    /// Automatically selected champion bundle; retain old strategy outside its tested rules.
+    pub default_champion: bool,
     /// Accept a final-response trade only when legal observations prove a unique match win.
     pub proven_reset_trade: bool,
     /// Sample learned continuation probabilities; 0 keeps deterministic argmax.
@@ -107,6 +109,7 @@ pub struct PlannerCfg {
 impl Default for PlannerCfg {
     fn default() -> Self {
         Self {
+            default_champion: false,
             proven_reset_trade: false,
             rollout_temperature: 0.,
             rule_evidence: false,
@@ -116,12 +119,12 @@ impl Default for PlannerCfg {
             policy_prior: false,
             policy_puct: 0.,
             rollout_policy: 0,
-            policy_model_path: "data/action_policy/model-v1.bin".into(),
+            policy_model_path: "research/artifacts/data/action_policy/model-v1.bin".into(),
             policy_actions: 12,
             policy_only: false,
             avoid_cycles: false,
             learned_value: false,
-            value_model_path: "data/match_value/model-v1.bin".into(),
+            value_model_path: "models/hard-value-v1.bin".into(),
             root_racing: false,
             blind_keep_evidence: false,
             racing_actions: 12,
@@ -151,7 +154,29 @@ impl Default for PlannerCfg {
 impl PlannerCfg {
     /// Normal remains frozen; only independently validated changes are promoted here.
     pub fn hard() -> Self {
-        Self::hard_with_model(std::env::var("CABO_HARD_VALUE_MODEL").ok())
+        let explicit = std::env::var("CABO_HARD_VALUE_MODEL").ok();
+        let bytes = if explicit.is_none() {
+            std::fs::read("models/hard-value-v1.bin").ok()
+        } else {
+            None
+        };
+        Self::hard_with_champion(explicit, bytes.as_deref())
+    }
+
+    fn hard_with_champion(explicit: Option<String>, bytes: Option<&[u8]>) -> Self {
+        if let Some(path) = explicit {
+            return Self::hard_with_model(
+                (!path.trim().is_empty() && !path.trim().eq_ignore_ascii_case("off"))
+                    .then_some(path),
+            );
+        }
+        let mut cfg = Self::hard_with_model(
+            bytes
+                .filter(|b| match_value::MatchValue::is_champion(b))
+                .map(|_| "models/hard-value-v1.bin".into()),
+        );
+        cfg.default_champion = cfg.learned_value;
+        cfg
     }
 
     fn hard_with_model(model: Option<String>) -> Self {
@@ -539,6 +564,19 @@ impl PlannerBot {
     }
 
     pub fn analyze(&self, view: &PlayerView, rng: &mut dyn RngCore) -> DecisionReport {
+        if self.cfg.default_champion && (view.target_score != 100 || view.cabo_penalty != 10) {
+            let mut cfg = self.cfg.clone();
+            cfg.default_champion = false;
+            cfg.learned_value = false;
+            cfg.validate_calls = false;
+            cfg.min_cabo_success = 0.75;
+            return Self {
+                cfg,
+                value_model: None,
+                policy_model: self.policy_model.clone(),
+            }
+            .analyze(view, rng);
+        }
         let start = Instant::now();
         let mut report = DecisionReport {
             command: fallback_command(view),

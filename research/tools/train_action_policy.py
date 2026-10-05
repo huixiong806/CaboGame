@@ -108,7 +108,7 @@ def metrics(net,data,device):
 def main():
     ap=argparse.ArgumentParser()
     for split in ['train','validation','test']:ap.add_argument('--'+split,required=True)
-    ap.add_argument('--out',default='data/action_policy/model-v1.bin');ap.add_argument('--report',default='reports/ACTION_POLICY_V1_LEARNING.json')
+    ap.add_argument('--out',default='research/artifacts/data/action_policy/model-v1.bin');ap.add_argument('--report',default='research/reports/ACTION_POLICY_V1_LEARNING.json')
     ap.add_argument('--epochs',type=int,default=35);ap.add_argument('--batch-size',type=int,default=256);ap.add_argument('--lr',type=float,default=.002)
     ap.add_argument('--device',default='cuda');ap.add_argument('--seed',type=int,default=2718);ap.add_argument('--init-model')
     ap.add_argument('--width',type=int,choices=[24,64],default=24)

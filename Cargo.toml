@@ -15,27 +15,27 @@ path = "src/bin/server.rs"
 
 [[bin]]
 name = "cabo-sim"
-path = "src/bin/sim.rs"
+path = "research/bin/sim.rs"
 
 [[bin]]
 name = "cabo-arena"
-path = "src/bin/arena.rs"
+path = "research/bin/arena.rs"
 
 [[bin]]
 name = "cabo-decide"
-path = "src/bin/decide.rs"
+path = "research/bin/decide.rs"
 
 [[bin]]
 name = "cabo-eval"
-path = "src/bin/eval.rs"
+path = "research/bin/eval.rs"
 
 [[bin]]
 name = "cabo-match-data"
-path = "src/bin/match_data.rs"
+path = "research/bin/match_data.rs"
 
 [[bin]]
 name = "cabo-policy-data"
-path = "src/bin/policy_data.rs"
+path = "research/bin/policy_data.rs"
 
 [dependencies]
 axum = "0.8"

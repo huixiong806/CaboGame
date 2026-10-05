@@ -431,7 +431,7 @@ mod tests {
     #[ignore = "requires local action-policy model and Python fixtures"]
     fn local_action_policy_parity() {
         let path = std::env::var("CABO_ACTION_POLICY_TEST")
-            .unwrap_or("data/action_policy/model-v1.bin".into());
+            .unwrap_or("research/artifacts/data/action_policy/model-v1.bin".into());
         let model = ActionPolicy::load(Path::new(&path)).unwrap();
         for line in std::fs::read_to_string(Path::new(&path).with_extension("predictions.tsv"))
             .unwrap()

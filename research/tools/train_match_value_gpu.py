@@ -56,7 +56,7 @@ def predict(model,d,batch_size=8192):
 def main():
     ap=argparse.ArgumentParser()
     for key in ['train','validation','test']: ap.add_argument('--'+key,required=True)
-    ap.add_argument('--out',default='data/match_value/model-gpu.bin'); ap.add_argument('--report',default='reports/MATCH_VALUE_GPU_LEARNING.json')
+    ap.add_argument('--out',default='research/artifacts/data/match_value/model-gpu.bin'); ap.add_argument('--report',default='research/reports/MATCH_VALUE_GPU_LEARNING.json')
     ap.add_argument('--epochs',type=int,default=25); ap.add_argument('--seed',type=int,default=2718)
     ap.add_argument('--batch-size',type=int,default=4096); ap.add_argument('--device',default='cuda')
     ap.add_argument('--lr',type=float,default=.001); ap.add_argument('--sort-seeds',action='store_true')

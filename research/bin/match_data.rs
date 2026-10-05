@@ -18,7 +18,7 @@ fn main() {
     let mut seed = 220000u64;
     let mut jobs = 4usize;
     let mut players = 0usize;
-    let mut out = "data/match_value/train.tsv".to_string();
+    let mut out = "research/artifacts/data/match_value/train.tsv".to_string();
     let mut bot = "fast".to_string();
     let mut roster = "mixed".to_string();
     let mut config = Vec::new();

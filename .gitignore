@@ -78,3 +78,9 @@ callgrind.out.*
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Local research archives and distributable packages
+/research/artifacts/
+
+# The small evaluated production model is intentionally distributed with source.
+!/models/hard-value-v1.bin

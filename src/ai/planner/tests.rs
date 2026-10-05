@@ -402,12 +402,12 @@ fn stochastic_policy_matches_its_probabilities_and_clones_paired_random_streams(
 #[ignore = "local opponent policy/value models; actual Hard latency and engine legality"]
 fn local_opponent_policy_production_budget() {
     let path = std::env::var("CABO_ACTION_POLICY_TEST")
-        .unwrap_or("data/action_policy/model-v1.bin".into());
+        .unwrap_or("research/artifacts/data/action_policy/model-v1.bin".into());
     let temperature = std::env::var("CABO_POLICY_TEMPERATURE_TEST")
         .unwrap_or("0".into())
         .parse()
         .unwrap();
-    let mut cfg = PlannerCfg::hard_with_model(Some("data/match_value/model-v1.bin".into()));
+    let mut cfg = PlannerCfg::hard_with_model(Some("models/hard-value-v1.bin".into()));
     cfg.rollout_policy = 2;
     cfg.policy_model_path = path;
     cfg.rollout_temperature = temperature;
@@ -533,13 +533,13 @@ fn action_policy_opt_in_requires_a_valid_model_and_leaves_normal_off() {
     assert!(!PlannerCfg::default().policy_only);
     assert!(PlannerBot::try_new(PlannerCfg {
         rollout_policy: 1,
-        policy_model_path: "data/missing-policy.bin".into(),
+        policy_model_path: "research/artifacts/data/missing-policy.bin".into(),
         ..PlannerCfg::default()
     })
     .is_err());
     assert!(PlannerBot::try_new(PlannerCfg {
         policy_only: true,
-        policy_model_path: "data/missing-policy.bin".into(),
+        policy_model_path: "research/artifacts/data/missing-policy.bin".into(),
         ..PlannerCfg::default()
     })
     .is_err());
@@ -591,7 +591,7 @@ fn action_learning_preserves_frozen_search_for_untrained_scoring_settings() {
 #[ignore = "requires local action-policy model; verifies complete learned-rollout searches"]
 fn learned_action_search_uses_only_legal_information() {
     let path = std::env::var("CABO_ACTION_POLICY_TEST")
-        .unwrap_or("data/action_policy/model-v1.bin".into());
+        .unwrap_or("research/artifacts/data/action_policy/model-v1.bin".into());
     for racing in [false, true] {
         for (mode, prior, puct, temperature) in [
             (1, false, 0., 0.),
@@ -648,7 +648,7 @@ fn learned_action_search_uses_only_legal_information() {
 #[ignore = "requires local action model; checks time bounds and real-engine legality"]
 fn local_action_policy_budget_and_games() {
     let path = std::env::var("CABO_ACTION_POLICY_TEST")
-        .unwrap_or("data/action_policy/model-v1.bin".into());
+        .unwrap_or("research/artifacts/data/action_policy/model-v1.bin".into());
     for n in 2..=4 {
         let direct = PlannerBot::new(PlannerCfg {
             policy_only: true,
@@ -758,7 +758,7 @@ fn hard_breaks_a_repeated_public_rotation_but_preserves_one_cycle() {
 
 #[test]
 fn model_configuration_fails_explicitly_and_default_normal_never_loads_it() {
-    let missing = "data/nonexistent-match-value-model.bin".to_string();
+    let missing = "research/artifacts/data/nonexistent-match-value-model.bin".to_string();
     assert!(
         crate::ai::build_bot("normal", &[("value_model_path".into(), missing.clone())]).is_some()
     );
@@ -777,7 +777,8 @@ fn local_hard_model_opt_in_enables_the_validated_bundle_only_for_hard() {
     let ordinary = PlannerCfg::hard_with_model(None);
     assert!(!ordinary.learned_value && !ordinary.validate_calls);
     assert_eq!(ordinary.min_cabo_success, 0.75);
-    let learned = PlannerCfg::hard_with_model(Some("data/missing-model.bin".into()));
+    let learned =
+        PlannerCfg::hard_with_model(Some("research/artifacts/data/missing-model.bin".into()));
     assert!(learned.learned_value && learned.validate_calls && learned.avoid_cycles);
     assert_eq!(learned.min_cabo_success, 0.0);
     assert_eq!(learned.simulations, ordinary.simulations);
@@ -786,10 +787,79 @@ fn local_hard_model_opt_in_enables_the_validated_bundle_only_for_hard() {
 }
 
 #[test]
+fn default_hard_champion_selection_falls_back_and_respects_explicit_off() {
+    for bytes in [None, Some(&b"CABOMV01invalid"[..])] {
+        let cfg = PlannerCfg::hard_with_champion(None, bytes);
+        assert!(!cfg.learned_value && !cfg.default_champion);
+        assert!(cfg.proven_reset_trade && cfg.avoid_cycles);
+    }
+    for off in ["off", "OFF", ""] {
+        assert!(!PlannerCfg::hard_with_champion(Some(off.into()), None).learned_value);
+    }
+    let cfg = PlannerCfg::hard_with_champion(Some("missing-explicit-model.bin".into()), None);
+    assert!(cfg.learned_value && !cfg.default_champion);
+    assert!(PlannerBot::try_new(cfg).is_err());
+    assert!(!PlannerCfg::default().learned_value && !PlannerCfg::default().default_champion);
+}
+
+#[test]
+fn automatic_champion_preserves_frozen_hard_for_custom_rules() {
+    for (target, penalty) in [(80, 10), (100, 15)] {
+        let mut s = dealt(918212, 3);
+        s.settings.target_score = target;
+        s.settings.cabo_penalty = penalty;
+        let me = s.actor().unwrap();
+        let view = project(&s, Some(me), 0);
+        let base = PlannerCfg {
+            budget_us: 0,
+            simulations: 32,
+            confirmation_samples: 16,
+            ..PlannerCfg::hard_with_model(None)
+        };
+        let mut cfg = base.clone();
+        cfg.default_champion = true;
+        cfg.learned_value = true;
+        cfg.validate_calls = true;
+        cfg.min_cabo_success = 0.0;
+        let bot = PlannerBot {
+            cfg,
+            value_model: None,
+            policy_model: None,
+        };
+        let old = PlannerBot::new(base).analyze(&view, &mut StdRng::seed_from_u64(6123));
+        let new = bot.analyze(&view, &mut StdRng::seed_from_u64(6123));
+        assert_eq!(old.command, new.command);
+        assert_eq!(old.simulations, new.simulations);
+        assert_eq!(old.confirmations, new.confirmations);
+        assert_eq!(
+            format!("{:?}", old.candidates),
+            format!("{:?}", new.candidates)
+        );
+    }
+}
+
+#[test]
+fn default_hard_selects_only_the_distributed_champion() {
+    let bytes = std::fs::read("models/hard-value-v1.bin").unwrap();
+    assert!(match_value::MatchValue::is_champion(&bytes));
+    let cfg = PlannerCfg::hard_with_champion(None, Some(&bytes));
+    assert!(cfg.default_champion && cfg.learned_value && cfg.validate_calls);
+    assert_eq!(cfg.min_cabo_success, 0.0);
+    assert!(PlannerBot::try_new(cfg).is_ok());
+    if std::env::var("CABO_HARD_VALUE_MODEL").is_err() {
+        assert!(PlannerCfg::hard().default_champion);
+    }
+    let mut other = bytes;
+    let last = other.len() - 1;
+    other[last] ^= 1;
+    assert!(!match_value::MatchValue::is_champion(&other));
+    assert!(!PlannerCfg::hard_with_champion(None, Some(&other)).learned_value);
+}
+
+#[test]
 #[ignore = "requires local model; checks production Hard time limit and legal commands"]
 fn local_learned_hard_default_budget_is_bounded() {
-    let path =
-        std::env::var("CABO_MATCH_VALUE_TEST").unwrap_or("data/match_value/model-v1.bin".into());
+    let path = std::env::var("CABO_MATCH_VALUE_TEST").unwrap_or("models/hard-value-v1.bin".into());
     let mut cfg = PlannerCfg::hard_with_model(Some(path));
     cfg.budget_us = 600000;
     let bot = PlannerBot::new(cfg);
@@ -817,8 +887,8 @@ fn local_learned_hard_default_budget_is_bounded() {
 #[test]
 #[ignore = "requires local trained model; full search must remain isolated from hidden ground truth"]
 fn learned_search_uses_only_legal_information() {
-    let path =
-        std::env::var("CABO_MATCH_VALUE_TEST").unwrap_or("data/match_value/model-v2.bin".into());
+    let path = std::env::var("CABO_MATCH_VALUE_TEST")
+        .unwrap_or("research/artifacts/data/match_value/model-v2.bin".into());
     let s = dealt(16, 4);
     let me = s.actor().unwrap();
     let mut other = s.clone();

@@ -8,6 +8,13 @@ pub(super) struct MatchValue {
 }
 
 impl MatchValue {
+    /// Identity check for the evaluated local V1 artifact, not a security boundary.
+    pub(super) fn is_champion(bytes: &[u8]) -> bool {
+        let fingerprint = bytes.iter().fold(14695981039346656037u64, |hash, &b| {
+            (hash ^ b as u64).wrapping_mul(1099511628211)
+        });
+        fingerprint == 0x65230aff90a17159 && Self::decode(bytes).is_ok()
+    }
     pub fn load(path: &Path) -> Result<Arc<Self>, String> {
         Self::decode(&std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)
             .map(Arc::new)
@@ -108,8 +115,8 @@ mod tests {
     #[test]
     #[ignore = "requires locally trained model; compares independent Python/Rust implementations"]
     fn local_model_inference_parity_and_seat_symmetry() {
-        let path =
-            std::env::var("CABO_MATCH_VALUE_TEST").unwrap_or("data/match_value/model.bin".into());
+        let path = std::env::var("CABO_MATCH_VALUE_TEST")
+            .unwrap_or("research/artifacts/data/match_value/model.bin".into());
         let model = MatchValue::load(Path::new(&path)).unwrap();
         let cases =
             std::fs::read_to_string(Path::new(&path).with_extension("predictions.tsv")).unwrap();

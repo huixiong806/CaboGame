@@ -20,7 +20,7 @@ fn main() {
     let mut games = 600usize;
     let mut seed = 700000u64;
     let mut jobs = 4usize;
-    let mut out = "data/action_policy/train-v1.jsonl".to_string();
+    let mut out = "research/artifacts/data/action_policy/train-v1.jsonl".to_string();
     let mut max_actions = 4000usize;
     let mut config = Vec::new();
     let mut cfg = PlannerCfg {

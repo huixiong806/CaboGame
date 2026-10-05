@@ -1,7 +1,7 @@
 """Summarize paired cabo-eval TSVs, treating seed blocks as independent units.
 
 Two rows per block are candidate then compare, including when bot IDs are equal.
-Usage: python tools/summarize_eval.py reports/HARD_*.tsv
+Usage: python research/tools/summarize_eval.py research/reports/HARD_*.tsv
 """
 import csv
 import glob

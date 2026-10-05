@@ -1,3 +1,5 @@
+> 归档文档：保留当时的方案、默认配置与结论。当前版本见 [项目 README](../../README.md)，路径和复现说明见 [研究索引](../README.md)。
+
 # 当前回合动作学习
 
 这是上一轮累计分价值学习之外的新路线：用搜索在真实引擎中作决策，学习当前合法观察下的动作分布，再检验动作网络能否帮助搜索。当前实现是搜索策略蒸馏，不是已经收敛的端到端强化学习。Normal 默认不启用任何新开关。
@@ -25,7 +27,7 @@ cargo build --release --bin cabo-policy-data --bin cabo-eval
 target/release/cabo-policy-data.exe --games 1200 --seed 700000 --jobs 4 --out data/action_policy/train-v1.jsonl --cfg learned_value=true,value_model_path=data/match_value/model-v1.bin
 target/release/cabo-policy-data.exe --games 300 --seed 710000 --jobs 2 --out data/action_policy/validation-v1.jsonl --cfg learned_value=true,value_model_path=data/match_value/model-v1.bin
 target/release/cabo-policy-data.exe --games 300 --seed 720000 --jobs 2 --out data/action_policy/test-v1.jsonl --cfg learned_value=true,value_model_path=data/match_value/model-v1.bin
-D:/miniconda3/envs/py311/python.exe tools/train_action_policy.py --train data/action_policy/train-v1.jsonl --validation data/action_policy/validation-v1.jsonl --test data/action_policy/test-v1.jsonl --epochs 40 --out data/action_policy/model-v1.bin --report reports/ACTION_POLICY_V1_LEARNING.json
+D:/miniconda3/envs/py311/python.exe research/tools/train_action_policy.py --train data/action_policy/train-v1.jsonl --validation data/action_policy/validation-v1.jsonl --test data/action_policy/test-v1.jsonl --epochs 40 --out data/action_policy/model-v1.bin --report research/reports/ACTION_POLICY_V1_LEARNING.json
 ```
 
 复用既有 conda/PyTorch/CUDA 环境与 RTX 3060，不需为游戏安装模型运行时。并行采集顺序不固定，训练器按 seed、step 排序。正式文件拒绝覆盖；重新采集须另选文件名。
@@ -39,8 +41,8 @@ D:/miniconda3/envs/py311/python.exe tools/train_action_policy.py --train data/ac
 - `policy_prior=true` 在搜索节点用学习 logit 排序动作和初始化边价值，保留原 UCT、快策略 incumbent 和独立复核；不替换 rollout。
 - `policy_puct=1` 改用动作概率引导树搜索分配，logit 温度 2、10% 均匀探索成分。它是独立实验；根动作 racing 只使用网络排序，PUCT 系数不改变 racing 分配。
 
-默认所有新开关关闭。模型准确率、预测损失和搜索轨迹数量均不能代替完整比赛验收，训练教师的能力也不是学习策略能超过的上界证明。实战结果见 [本轮报告](reports/HARD_POLICY_ITERATION_RESULTS.md)。
+默认所有新开关关闭。模型准确率、预测损失和搜索轨迹数量均不能代替完整比赛验收，训练教师的能力也不是学习策略能超过的上界证明。实战结果见 [本轮报告](../reports/HARD_POLICY_ITERATION_RESULTS.md)。
 
-后续 Normal 专用对手教师为 32/16、无整局价值、无普通宣告复核，另采集 1,800/400/400 个训练/验证/测试回合。V5 及随机续招评估见 [后续报告](reports/HARD_BLIND_AND_OPPONENT_RESULTS.md)。动作特征 55 与候选短名单固定使用训练时的评分基准；运行时整局价值和概率凑满分开关不会改变其含义，真实搜索效用仍照常使用这些配置。
+后续 Normal 专用对手教师为 32/16、无整局价值、无普通宣告复核，另采集 1,800/400/400 个训练/验证/测试回合。V5 及随机续招评估见 [后续报告](../reports/HARD_BLIND_AND_OPPONENT_RESULTS.md)。动作特征 55 与候选短名单固定使用训练时的评分基准；运行时整局价值和概率凑满分开关不会改变其含义，真实搜索效用仍照常使用这些配置。
 
 训练器支持 `--extra-train/validation/test` 和 `--extra-weight`。新增域必须同样按完整回合分割，六个文件的 seed 都互不重叠；按指定权重均衡两个域的完整回合，混合验证损失选择 checkpoint，同时单独报告各域指标。正式模型也拒绝覆盖，以免修改正在评估的冻结权重。

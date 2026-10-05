@@ -1,3 +1,5 @@
+> 归档文档：保留当时的方案、默认配置与结论。当前版本见 [项目 README](../../README.md)，路径和复现说明见 [研究索引](../README.md)。
+
 # AI 难度与版本约定
 
 | 难度 | 实现与定位 | 更新约定 |
@@ -27,4 +29,4 @@ Hard 的离线学习流程与配置见 [HARD_LEARNING.md](HARD_LEARNING.md)。�
 
 当前回合动作学习见 [ACTION_POLICY_LEARNING.md](ACTION_POLICY_LEARNING.md)。已完成搜索策略蒸馏、学习先验/rollout/PUCT 及后续自我对弈迭代；两组独立验收未证明新棋力增益，所有新接入默认关闭，冠军保持上一版。
 
-后续盲配审计、对手网络 GPU 训练与独立验收见 [HARD_BLIND_AND_OPPONENT_RESULTS.md](reports/HARD_BLIND_AND_OPPONENT_RESULTS.md)。新的盲配限制、规则敏感推断和网络续招继续默认关闭；动作网络的训练/运行特征基准不一致已修正，不能把该修复本身当成实测棋力提升。
+后续盲配审计、对手网络 GPU 训练与独立验收见 [HARD_BLIND_AND_OPPONENT_RESULTS.md](../reports/HARD_BLIND_AND_OPPONENT_RESULTS.md)。新的盲配限制、规则敏感推断和网络续招继续默认关闭；动作网络的训练/运行特征基准不一致已修正，不能把该修复本身当成实测棋力提升。
