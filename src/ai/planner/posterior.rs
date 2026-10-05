@@ -21,6 +21,7 @@ fn evidence(
     blind_keep: bool,
     behavioral: bool,
     call: bool,
+    rule_evidence: bool,
 ) -> Vec<Vec<[f32; 14]>> {
     let n = view.all_seats.len();
     let blank = || {
@@ -73,7 +74,7 @@ fn evidence(
                     }
                     let mut a = hands[*actor][my_slot as usize];
                     let mut b = hands[player][slot as usize];
-                    if behavioral {
+                    if behavioral && !(rule_evidence && non_greedy(view, *actor, &hands[*actor])) {
                         let am = prior_mean(&a.weights);
                         let bm = prior_mean(&b.weights);
                         if a.known & (1 << actor) != 0 {
@@ -95,6 +96,9 @@ fn evidence(
                 let Some(hand) = hands.get_mut(*player) else {
                     return blank();
                 };
+                if rule_evidence && non_greedy(view, *player, hand) {
+                    continue;
+                }
                 if *powered && (!behavioral || *rank < 9) {
                     continue;
                 }
@@ -122,6 +126,7 @@ fn evidence(
                 let all_known = slots
                     .iter()
                     .all(|&s| hand[s as usize].known & (1 << player) != 0);
+                let non_greedy = rule_evidence && non_greedy(view, *player, hand);
                 let mut new = Trace {
                     known: if *source == Pile::Discard {
                         (1 << n) - 1
@@ -136,16 +141,17 @@ fn evidence(
                     }
                     // Selecting a known single card also says something about the known cards
                     // left behind. Ignore this when the selection was blind or a group plan.
-                    if slots.len() == 1 && all_known {
+                    if slots.len() == 1 && all_known && !non_greedy {
                         for t in hand.iter_mut() {
                             if t.known & (1 << player) != 0 {
                                 survival_evidence(&mut t.weights, exposed[0]);
                             }
                         }
                     }
-                    if *source == Pile::Draw && all_known {
+                    if *source == Pile::Draw && all_known && !non_greedy {
                         keep_evidence(&mut new.weights, exposed.iter().map(|&r| r as f32).sum());
-                    } else if blind_keep && *source == Pile::Draw && slots.len() == 1 {
+                    } else if blind_keep && *source == Pile::Draw && slots.len() == 1 && !non_greedy
+                    {
                         // The old rank was unknown to the actor before choosing. Its newly
                         // exposed value is not evidence about why they chose the incoming card.
                         // Use a broad prior threshold, with the existing 12% lapse component.
@@ -163,6 +169,9 @@ fn evidence(
                 }
             }
             PublicEvent::Cabo { player } if call => {
+                if rule_evidence && non_greedy(view, *player, &hands[*player]) {
+                    continue;
+                }
                 let known = hands[*player]
                     .iter()
                     .filter(|t| t.known & (1 << player) != 0)
@@ -203,6 +212,17 @@ fn evidence(
         .collect()
 }
 
+fn non_greedy(view: &PlayerView, player: usize, hand: &[Trace]) -> bool {
+    let seat = &view.all_seats[player];
+    super::state::non_greedy_possible(
+        seat.total_score,
+        seat.score_reset_used,
+        hand.len(),
+        hand.iter().filter(|t| t.known & (1 << player) != 0).count(),
+        view.cabo_penalty,
+    )
+}
+
 pub(super) struct Sampler {
     pub template: State,
     unknown: Vec<usize>,
@@ -231,6 +251,18 @@ impl Sampler {
         behavioral: bool,
         call: bool,
     ) -> Option<Self> {
+        Self::configured_with_rules(view, rng, use_evidence, blind_keep, behavioral, call, false)
+    }
+
+    pub fn configured_with_rules(
+        view: &PlayerView,
+        rng: &mut dyn RngCore,
+        use_evidence: bool,
+        blind_keep: bool,
+        behavioral: bool,
+        call: bool,
+        rule_evidence: bool,
+    ) -> Option<Self> {
         let me = view.me?;
         let n = view.all_seats.len();
         if !(2..=4).contains(&n) || me >= n || view.discard_ranks.len() != view.discard_count {
@@ -249,7 +281,7 @@ impl Sampler {
         {
             return None;
         }
-        let weights = evidence(view, blind_keep, behavioral, call);
+        let weights = evidence(view, blind_keep, behavioral, call, rule_evidence);
         let mut pool = RANK_COPIES;
         let mut cards = Vec::with_capacity(52);
         let mut unknown = Vec::new();
@@ -325,6 +357,13 @@ impl Sampler {
             Default::default()
         };
         let template = State {
+            proven_reset_trade: false,
+            rollout_temperature: 0.,
+            policy_random: std::array::from_fn(|_| std::cell::Cell::new(0)),
+            rule_evidence,
+            exchange_cycle: None,
+            speculative_loss: 0.,
+            rollout_call: false,
             cards,
             hands,
             deck,
@@ -392,6 +431,17 @@ impl Sampler {
                 self.template.cards[id].rank = r;
             }
         }
-        self.template.clone()
+        let world = self.template.clone();
+        if world.rollout_temperature > 0.
+            && world.rollout_policy > 0
+            && world.policy_model.is_some()
+            && world.target == 100
+            && world.penalty == 10
+        {
+            for cell in world.policy_random.iter().take(world.n()) {
+                cell.set(rng.next_u64());
+            }
+        }
+        world
     }
 }

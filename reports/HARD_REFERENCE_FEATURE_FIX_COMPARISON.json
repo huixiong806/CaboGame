@@ -1,0 +1,14 @@
+{
+  "old": "reports/HARD_R49_OPPONENT_POLICY_V1_DEV.tsv",
+  "new": "reports/HARD_R53_REFERENCE_FIXED_V1_DEV.tsv",
+  "blocks": 32,
+  "control_outcomes_and_decision_counts_identical": true,
+  "win_delta_pp": 0.0,
+  "win_delta_95_ci_half": 0.0,
+  "gap_delta": 0.0,
+  "gap_delta_95_ci_half": 0.0,
+  "input_sha256": [
+    "1754e370e181599dc7e525df48b5e82a4c72cbb271166d9d70d4fdccaa533e3e",
+    "47481f5048b238a9fa389be33cbbf5fd970ccf46f7014388e843670ae9151db5"
+  ]
+}

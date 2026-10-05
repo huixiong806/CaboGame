@@ -113,10 +113,59 @@ impl ActionPolicy {
         if super::special::preferred_call(s, &info) {
             return Action::Cabo;
         }
+        self.choices(s, &info, max_actions)
+            .into_iter()
+            .max_by(|a, b| a.1.total_cmp(&b.1))
+            .map(|(a, _)| a)
+            .unwrap_or(Action::Cabo)
+    }
+
+    pub fn sample(&self, s: &State, max_actions: usize, temperature: f64) -> Action {
+        if !temperature.is_finite() || temperature <= 0. {
+            return self.choose(s, max_actions);
+        }
+        let temperature = temperature.max(0.05);
+        if s.target != 100 || s.penalty != 10 {
+            return policy::choose(s, 1);
+        }
+        let info = Info::new(s, s.actor, s.stage == Stage::Idle && s.caller.is_none());
+        if super::special::preferred_call(s, &info) {
+            return Action::Cabo;
+        }
+        let choices = self.choices(s, &info, max_actions);
+        let max = choices
+            .iter()
+            .map(|(_, v)| *v as f64 / temperature)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let weights: Vec<_> = choices
+            .iter()
+            .map(|(_, v)| (*v as f64 / temperature - max).exp())
+            .collect();
+        // One independent stream per seat, cloned with the world for paired confirmations.
+        let cell = &s.policy_random[s.actor];
+        let mut z = cell.get().wrapping_add(0x9E3779B97F4A7C15);
+        cell.set(z);
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+        z ^= z >> 31;
+        let mut threshold = ((z >> 11) as f64 / (1u64 << 53) as f64) * weights.iter().sum::<f64>();
+        for ((action, _), weight) in choices.iter().zip(&weights) {
+            threshold -= weight;
+            if threshold < 0. {
+                return action.clone();
+            }
+        }
+        choices
+            .last()
+            .map(|(a, _)| a.clone())
+            .unwrap_or(Action::Cabo)
+    }
+
+    fn choices(&self, s: &State, info: &Info, max_actions: usize) -> Vec<(Action, f32)> {
         let mut ranked: Vec<_> = policy::candidates(s, &info)
             .into_iter()
             .map(|a| {
-                let score = policy::score(s, &info, &a);
+                let score = reference_score(s, &info, &a);
                 (a, score)
             })
             .collect();
@@ -140,14 +189,29 @@ impl ActionPolicy {
                 let logit = self.logit(&action_features(s, &info, &a, &ctx));
                 (a, logit)
             })
-            .max_by(|a, b| a.1.total_cmp(&b.1))
-            .map(|(a, _)| a)
-            .unwrap_or(Action::Cabo)
+            .collect()
     }
 }
 
 pub(super) fn features(s: &State, info: &Info, a: &Action) -> [f32; INPUTS] {
     action_features(s, info, a, &context(s, info))
+}
+
+fn reference_score(s: &State, info: &Info, a: &Action) -> f64 {
+    // Exported datasets use the frozen score baseline. Runtime match-value and reset
+    // ablations must not silently change the meaning of feature 55 or its residual.
+    if s.reset_policy_player.is_some()
+        || (s.value_model.is_some()
+            && matches!(a, Action::Cabo)
+            && super::special::call_relevant(s))
+    {
+        let mut reference = s.clone();
+        reference.value_model = None;
+        reference.reset_policy_player = None;
+        policy::score(&reference, info, a)
+    } else {
+        policy::score(s, info, a)
+    }
 }
 
 fn context(s: &State, info: &Info) -> [f32; 38] {
@@ -304,7 +368,7 @@ fn action_features(s: &State, info: &Info, a: &Action, ctx: &[f32; 38]) -> [f32;
         duplicate,
         entropy / 8.,
         removed / 52.,
-        policy::score(s, info, a).clamp(-80., 80.) / 20.,
+        reference_score(s, info, a).clamp(-80., 80.) / 20.,
     ]);
     let target = match a {
         Action::Discard(Some(PowerUse::Spy { player, slot }))

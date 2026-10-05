@@ -12,7 +12,7 @@ impl MatchValue {
         Self::decode(&std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)
             .map(Arc::new)
     }
-    fn decode(bytes: &[u8]) -> Result<Self, String> {
+    pub(super) fn decode(bytes: &[u8]) -> Result<Self, String> {
         if bytes.len() != 8 + 3425 * 4 || &bytes[..8] != b"CABOMV01" {
             return Err("invalid match-value model format/size".into());
         }

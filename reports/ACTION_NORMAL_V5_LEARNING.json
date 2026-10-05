@@ -1,0 +1,731 @@
+{
+  "device": "cuda",
+  "parameters": 1873,
+  "features": 64,
+  "selected_epoch": 36,
+  "epochs": 40,
+  "data": [
+    {
+      "action_rows": 613467,
+      "features": 64,
+      "groups": 52307,
+      "illegal_commands": 0,
+      "overrides": [
+        [
+          "simulations",
+          "32"
+        ],
+        [
+          "confirmation_samples",
+          "16"
+        ],
+        [
+          "validate_calls",
+          "false"
+        ],
+        [
+          "min_cabo_success",
+          "0.75"
+        ],
+        [
+          "avoid_cycles",
+          "true"
+        ],
+        [
+          "learned_value",
+          "false"
+        ]
+      ],
+      "rounds": 1800,
+      "seconds": 468.4392097,
+      "seed_end": 861799,
+      "seed_start": 860000,
+      "teacher": "PlannerCfg { rule_evidence: false, rollout_cycles: false, speculative_loss: 0.0, rollout_call: false, policy_prior: false, policy_puct: 0.0, rollout_policy: 0, policy_model_path: \"data/action_policy/model-v1.bin\", policy_actions: 12, policy_only: false, avoid_cycles: true, learned_value: false, value_model_path: \"data/match_value/model-v1.bin\", root_racing: false, blind_keep_evidence: false, racing_actions: 12, probabilistic_reset: false, behavioral_evidence: false, match_cabo: false, call_evidence: false, validate_calls: false, budget_us: 0, simulations: 32, tree_depth: 6, max_actions: 64, exploration: 0.1, use_evidence: true, special_tactics: true, min_cabo_success: 0.75, confirmation_samples: 16, confirmation_t: 1.64, opponent_style: 4 }",
+      "data_sha256": "7dbdd39f985b524e7e812c16e27221fd2fc3fd49809b927fa34da12acebe051a"
+    },
+    {
+      "action_rows": 130528,
+      "features": 64,
+      "groups": 11350,
+      "illegal_commands": 0,
+      "overrides": [
+        [
+          "simulations",
+          "32"
+        ],
+        [
+          "confirmation_samples",
+          "16"
+        ],
+        [
+          "validate_calls",
+          "false"
+        ],
+        [
+          "min_cabo_success",
+          "0.75"
+        ],
+        [
+          "avoid_cycles",
+          "true"
+        ],
+        [
+          "learned_value",
+          "false"
+        ]
+      ],
+      "rounds": 400,
+      "seconds": 245.3769391,
+      "seed_end": 870399,
+      "seed_start": 870000,
+      "teacher": "PlannerCfg { rule_evidence: false, rollout_cycles: false, speculative_loss: 0.0, rollout_call: false, policy_prior: false, policy_puct: 0.0, rollout_policy: 0, policy_model_path: \"data/action_policy/model-v1.bin\", policy_actions: 12, policy_only: false, avoid_cycles: true, learned_value: false, value_model_path: \"data/match_value/model-v1.bin\", root_racing: false, blind_keep_evidence: false, racing_actions: 12, probabilistic_reset: false, behavioral_evidence: false, match_cabo: false, call_evidence: false, validate_calls: false, budget_us: 0, simulations: 32, tree_depth: 6, max_actions: 64, exploration: 0.1, use_evidence: true, special_tactics: true, min_cabo_success: 0.75, confirmation_samples: 16, confirmation_t: 1.64, opponent_style: 4 }",
+      "data_sha256": "a51dc2871bba57d451c3e226842fd4bb48cf9ce8219bf190ed0bc3338195747e"
+    },
+    {
+      "action_rows": 136569,
+      "features": 64,
+      "groups": 11526,
+      "illegal_commands": 0,
+      "overrides": [
+        [
+          "simulations",
+          "32"
+        ],
+        [
+          "confirmation_samples",
+          "16"
+        ],
+        [
+          "validate_calls",
+          "false"
+        ],
+        [
+          "min_cabo_success",
+          "0.75"
+        ],
+        [
+          "avoid_cycles",
+          "true"
+        ],
+        [
+          "learned_value",
+          "false"
+        ]
+      ],
+      "rounds": 400,
+      "seconds": 265.1328431,
+      "seed_end": 880399,
+      "seed_start": 880000,
+      "teacher": "PlannerCfg { rule_evidence: false, rollout_cycles: false, speculative_loss: 0.0, rollout_call: false, policy_prior: false, policy_puct: 0.0, rollout_policy: 0, policy_model_path: \"data/action_policy/model-v1.bin\", policy_actions: 12, policy_only: false, avoid_cycles: true, learned_value: false, value_model_path: \"data/match_value/model-v1.bin\", root_racing: false, blind_keep_evidence: false, racing_actions: 12, probabilistic_reset: false, behavioral_evidence: false, match_cabo: false, call_evidence: false, validate_calls: false, budget_us: 0, simulations: 32, tree_depth: 6, max_actions: 64, exploration: 0.1, use_evidence: true, special_tactics: true, min_cabo_success: 0.75, confirmation_samples: 16, confirmation_t: 1.64, opponent_style: 4 }",
+      "data_sha256": "b699a1d3674a75057583ad14155fecf90dfd540baa845e690f5a3735639b2bc6"
+    }
+  ],
+  "metrics": {
+    "train": {
+      "cross_entropy": 0.3871352970600128,
+      "top1_equivalent": 0.9422643196576261,
+      "score_baseline_top1_equivalent": 0.798075724179963,
+      "idle_accuracy": 0.9457854598043246,
+      "drew_accuracy": 0.9360832980236746,
+      "rounds": 1800,
+      "groups": 52307,
+      "actions": 613467
+    },
+    "validation": {
+      "cross_entropy": 0.4192342758178711,
+      "top1_equivalent": 0.9405820634288674,
+      "score_baseline_top1_equivalent": 0.7904844574014808,
+      "idle_accuracy": 0.9440589589550895,
+      "drew_accuracy": 0.9344364047330738,
+      "rounds": 400,
+      "groups": 11350,
+      "actions": 130528
+    },
+    "test": {
+      "cross_entropy": 0.42907387018203735,
+      "top1_equivalent": 0.9345435144002943,
+      "score_baseline_top1_equivalent": 0.7928678515020061,
+      "idle_accuracy": 0.9393955693356817,
+      "drew_accuracy": 0.925998843956192,
+      "rounds": 400,
+      "groups": 11526,
+      "actions": 136569
+    }
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_cross_entropy": 0.4585529487452364,
+      "validation": {
+        "cross_entropy": 0.45645633339881897,
+        "top1_equivalent": 0.9265438526942801,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9275010429092136,
+        "drew_accuracy": 0.9248519513059383,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 2,
+      "train_cross_entropy": 0.439491989643597,
+      "validation": {
+        "cross_entropy": 0.4497431814670563,
+        "top1_equivalent": 0.9303087300844614,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9342876580665015,
+        "drew_accuracy": 0.9232756935240182,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 3,
+      "train_cross_entropy": 0.433568173317265,
+      "validation": {
+        "cross_entropy": 0.4457777142524719,
+        "top1_equivalent": 0.9324032613938851,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9374790674988647,
+        "drew_accuracy": 0.9234314151902903,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 4,
+      "train_cross_entropy": 0.4370412417941962,
+      "validation": {
+        "cross_entropy": 0.4449285864830017,
+        "top1_equivalent": 0.9341334359048709,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9373661845443738,
+        "drew_accuracy": 0.9284193240951139,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 5,
+      "train_cross_entropy": 0.4288793141855061,
+      "validation": {
+        "cross_entropy": 0.44008973240852356,
+        "top1_equivalent": 0.9333567341895118,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9387752334855014,
+        "drew_accuracy": 0.9237791535387829,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 6,
+      "train_cross_entropy": 0.421867782107358,
+      "validation": {
+        "cross_entropy": 0.4398912489414215,
+        "top1_equivalent": 0.9306584847098436,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9342625010984187,
+        "drew_accuracy": 0.9242881309010548,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 7,
+      "train_cross_entropy": 0.4182909049426604,
+      "validation": {
+        "cross_entropy": 0.43779951333999634,
+        "top1_equivalent": 0.934953540243093,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9387052197517332,
+        "drew_accuracy": 0.9283221814282487,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 8,
+      "train_cross_entropy": 0.4170283756332998,
+      "validation": {
+        "cross_entropy": 0.4406110942363739,
+        "top1_equivalent": 0.9325855619077922,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9355379112867628,
+        "drew_accuracy": 0.9273670756182122,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 9,
+      "train_cross_entropy": 0.4111516210939518,
+      "validation": {
+        "cross_entropy": 0.4385383725166321,
+        "top1_equivalent": 0.9335901099026983,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.936862279413143,
+        "drew_accuracy": 0.9278063189160806,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 10,
+      "train_cross_entropy": 0.41154378366953037,
+      "validation": {
+        "cross_entropy": 0.4343833327293396,
+        "top1_equivalent": 0.9368381310308475,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9418630216450617,
+        "drew_accuracy": 0.9279562815574429,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 11,
+      "train_cross_entropy": 0.41229479038660893,
+      "validation": {
+        "cross_entropy": 0.43476933240890503,
+        "top1_equivalent": 0.9337048427866721,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9362655866252494,
+        "drew_accuracy": 0.9291785469803807,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 12,
+      "train_cross_entropy": 0.4237390266774861,
+      "validation": {
+        "cross_entropy": 0.4321308732032776,
+        "top1_equivalent": 0.9373552524587158,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9406769177625167,
+        "drew_accuracy": 0.9314839741574659,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 13,
+      "train_cross_entropy": 0.4155945693580304,
+      "validation": {
+        "cross_entropy": 0.4329107999801636,
+        "top1_equivalent": 0.9364880321531928,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.940496355108976,
+        "drew_accuracy": 0.9294030378981237,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 14,
+      "train_cross_entropy": 0.40929430966362945,
+      "validation": {
+        "cross_entropy": 0.43004053831100464,
+        "top1_equivalent": 0.9373522849876373,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9418516052417701,
+        "drew_accuracy": 0.9293994182890463,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 15,
+      "train_cross_entropy": 0.39771807145554594,
+      "validation": {
+        "cross_entropy": 0.42853108048439026,
+        "top1_equivalent": 0.9369073865212231,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9418897094965489,
+        "drew_accuracy": 0.9281007783595349,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 16,
+      "train_cross_entropy": 0.39751771314791334,
+      "validation": {
+        "cross_entropy": 0.4285742938518524,
+        "top1_equivalent": 0.9359288541670252,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9403023843856307,
+        "drew_accuracy": 0.9281983302509111,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 17,
+      "train_cross_entropy": 0.3995058680040141,
+      "validation": {
+        "cross_entropy": 0.42807114124298096,
+        "top1_equivalent": 0.9383942481927819,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9431014148414267,
+        "drew_accuracy": 0.9300739982949578,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 18,
+      "train_cross_entropy": 0.39964063227692864,
+      "validation": {
+        "cross_entropy": 0.42815107107162476,
+        "top1_equivalent": 0.9377231704154407,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9434101343438606,
+        "drew_accuracy": 0.9276710595436096,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 19,
+      "train_cross_entropy": 0.4025052168557906,
+      "validation": {
+        "cross_entropy": 0.4296993017196655,
+        "top1_equivalent": 0.9329360799492047,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9357579328447145,
+        "drew_accuracy": 0.9279482554216198,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 20,
+      "train_cross_entropy": 0.40530867620652794,
+      "validation": {
+        "cross_entropy": 0.42581918835639954,
+        "top1_equivalent": 0.9379113208836833,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9411788646169277,
+        "drew_accuracy": 0.9321357062853584,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 21,
+      "train_cross_entropy": 0.3970358107594893,
+      "validation": {
+        "cross_entropy": 0.43701910972595215,
+        "top1_equivalent": 0.9365669574180313,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9416874384795103,
+        "drew_accuracy": 0.9275161450698335,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 22,
+      "train_cross_entropy": 0.4051694679302872,
+      "validation": {
+        "cross_entropy": 0.42540472745895386,
+        "top1_equivalent": 0.9385422789320321,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9436318022050582,
+        "drew_accuracy": 0.9295461866639672,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 23,
+      "train_cross_entropy": 0.4021690660350116,
+      "validation": {
+        "cross_entropy": 0.4258759021759033,
+        "top1_equivalent": 0.9366711246316546,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9419238470751192,
+        "drew_accuracy": 0.927386566289936,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 24,
+      "train_cross_entropy": 0.38988518169703523,
+      "validation": {
+        "cross_entropy": 0.42698168754577637,
+        "top1_equivalent": 0.9399087770617988,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9432911492775329,
+        "drew_accuracy": 0.9339301950010879,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 25,
+      "train_cross_entropy": 0.392136523023803,
+      "validation": {
+        "cross_entropy": 0.4247601330280304,
+        "top1_equivalent": 0.9386269520539635,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9433330923335813,
+        "drew_accuracy": 0.9303085163359699,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 26,
+      "train_cross_entropy": 0.39439604389698735,
+      "validation": {
+        "cross_entropy": 0.4240502715110779,
+        "top1_equivalent": 0.9368059325583029,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9393421775513562,
+        "drew_accuracy": 0.9323229401938021,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 27,
+      "train_cross_entropy": 0.3934890418093286,
+      "validation": {
+        "cross_entropy": 0.4269576966762543,
+        "top1_equivalent": 0.9380997825026145,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9407716894407826,
+        "drew_accuracy": 0.9333769980573922,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 28,
+      "train_cross_entropy": 0.39344343632675577,
+      "validation": {
+        "cross_entropy": 0.42501670122146606,
+        "top1_equivalent": 0.9369505639369939,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9400037725330379,
+        "drew_accuracy": 0.9315538018494262,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 29,
+      "train_cross_entropy": 0.39365828110988627,
+      "validation": {
+        "cross_entropy": 0.4232903718948364,
+        "top1_equivalent": 0.937980441435182,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9418037473649225,
+        "drew_accuracy": 0.9312224778562991,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 30,
+      "train_cross_entropy": 0.3936684976482003,
+      "validation": {
+        "cross_entropy": 0.42324650287628174,
+        "top1_equivalent": 0.9379364712841972,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9415732819085522,
+        "drew_accuracy": 0.9315081513447689,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 31,
+      "train_cross_entropy": 0.3800074596949444,
+      "validation": {
+        "cross_entropy": 0.42533642053604126,
+        "top1_equivalent": 0.9387371837343133,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.943372770816902,
+        "drew_accuracy": 0.9305434557809238,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 32,
+      "train_cross_entropy": 0.39490600632313505,
+      "validation": {
+        "cross_entropy": 0.42655014991760254,
+        "top1_equivalent": 0.9376930716583065,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9405597912643923,
+        "drew_accuracy": 0.9326259420472289,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 33,
+      "train_cross_entropy": 0.3898840521162587,
+      "validation": {
+        "cross_entropy": 0.42212507128715515,
+        "top1_equivalent": 0.9397504573989278,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9441002025604853,
+        "drew_accuracy": 0.9320619752530007,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 34,
+      "train_cross_entropy": 0.39004932959326744,
+      "validation": {
+        "cross_entropy": 0.4241931438446045,
+        "top1_equivalent": 0.9379119796961876,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9426766921554097,
+        "drew_accuracy": 0.9294900135090722,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 35,
+      "train_cross_entropy": 0.38682482652957995,
+      "validation": {
+        "cross_entropy": 0.4250923991203308,
+        "top1_equivalent": 0.9402929672507137,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9428746039499634,
+        "drew_accuracy": 0.9357297418358381,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 36,
+      "train_cross_entropy": 0.387506946398026,
+      "validation": {
+        "cross_entropy": 0.4192342758178711,
+        "top1_equivalent": 0.9405820634288674,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9440589589550895,
+        "drew_accuracy": 0.9344364047330738,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 37,
+      "train_cross_entropy": 0.39364369103218994,
+      "validation": {
+        "cross_entropy": 0.42436090111732483,
+        "top1_equivalent": 0.9377596357718333,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9415225167233173,
+        "drew_accuracy": 0.9311084776147024,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 38,
+      "train_cross_entropy": 0.38451574598787747,
+      "validation": {
+        "cross_entropy": 0.419778048992157,
+        "top1_equivalent": 0.9386629135830576,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9434095935060698,
+        "drew_accuracy": 0.9302728211787841,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 39,
+      "train_cross_entropy": 0.38903539555416966,
+      "validation": {
+        "cross_entropy": 0.4356725513935089,
+        "top1_equivalent": 0.9357657767878705,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9372977936857697,
+        "drew_accuracy": 0.9330578285910759,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    },
+    {
+      "epoch": 40,
+      "train_cross_entropy": 0.39205708706123915,
+      "validation": {
+        "cross_entropy": 0.4241803288459778,
+        "top1_equivalent": 0.937535770191127,
+        "score_baseline_top1_equivalent": 0.7904844574014808,
+        "idle_accuracy": 0.9411204103134818,
+        "drew_accuracy": 0.9311996653029891,
+        "rounds": 400,
+        "groups": 11350,
+        "actions": 130528
+      }
+    }
+  ],
+  "training_seconds": 36.77241039997898,
+  "total_seconds": 80.64739520009607,
+  "cuda_numpy_max_error": 7.62939453125e-06,
+  "model_sha256": "ea32c83b26d85daaa242c7fe241e6a1aae2ebf3f0ca6141f1be73c4899c38d5f",
+  "training_config": {
+    "seed": 2718,
+    "learning_rate": 0.001,
+    "batch_size": 256,
+    "width": 24,
+    "extra_weight": null,
+    "init_model_sha256": "00dd6828ea49ea1c041ae72b95e85c0a9875196263f21b8495c900caa131dbe3",
+    "torch_version": "2.9.1+cu128",
+    "device_name": "NVIDIA GeForce RTX 3060 Laptop GPU"
+  }
+}

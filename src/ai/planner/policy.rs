@@ -241,7 +241,42 @@ pub(super) fn candidates(s: &State, info: &Info) -> Vec<Action> {
         }
         Stage::End => {}
     }
+    if s.speculative_loss > 0. && s.actor == s.policy_player {
+        out.retain(|a| {
+            let slots = match a {
+                Action::Exchange(slots) | Action::Replace(slots) if slots.len() > 1 => slots,
+                _ => return true,
+            };
+            if slots.iter().all(|&i| info.values[me][i as usize].is_some()) {
+                return true;
+            }
+            let incoming = match a {
+                Action::Exchange(_) => s.visible(*s.discard.last().unwrap(), me).unwrap(),
+                _ => {
+                    let Stage::Drew(id) = s.stage else {
+                        unreachable!()
+                    };
+                    s.visible(id, me).unwrap()
+                }
+            };
+            let removed = expected_group_removal(info, me, slots);
+            removed - incoming as f64 >= -s.speculative_loss
+        });
+    }
     out
+}
+
+fn expected_group_removal(info: &Info, me: usize, slots: &[u8]) -> f64 {
+    (0..14)
+        .map(|r| {
+            slots.len() as f64
+                * r as f64
+                * slots
+                    .iter()
+                    .map(|&slot| info.probs[me][slot as usize][r])
+                    .product::<f64>()
+        })
+        .sum()
 }
 
 /// Score uses means of distributions, never the hidden card rank stored in the simulation.
@@ -284,16 +319,7 @@ fn ordinary_score(s: &State, info: &Info, action: &Action) -> f64 {
                 info.means[me][slots[0] as usize]
             } else {
                 // Conditional on matching, all removed cards have the same rank.
-                (0..14)
-                    .map(|r| {
-                        slots.len() as f64
-                            * r as f64
-                            * slots
-                                .iter()
-                                .map(|&slot| info.probs[me][slot as usize][r])
-                                .product::<f64>()
-                    })
-                    .sum()
+                expected_group_removal(info, me, slots)
             };
             let gain = removed - incoming as f64;
             let unknown = slots
@@ -406,6 +432,10 @@ pub(super) fn search_ranked(s: &State, max_actions: usize, learned: bool) -> Vec
 /// Four distinct styles: proactive, balanced, cautious, and a passive control.
 /// Each simulation samples a style per seat, held fixed throughout the round.
 pub(super) fn choose(s: &State, style: u8) -> Action {
+    choose_mode(s, style, false)
+}
+
+fn choose_mode(s: &State, style: u8, expected_call: bool) -> Action {
     let info = Info::new(s, s.actor, s.caller.is_none() && s.stage == Stage::Idle);
     if style != 3 && super::special::preferred_call(s, &info) {
         return Action::Cabo;
@@ -416,7 +446,15 @@ pub(super) fn choose(s: &State, style: u8) -> Action {
         2 => 0.94,
         _ => 2.0,
     };
-    if s.stage == Stage::Idle && s.caller.is_none() && info.lowest_prob >= threshold {
+    let call_worthwhile = if expected_call && style != 3 {
+        // A fixed 82% requirement ignores how much calling saves. The response margin
+        // still prevents calls on a small edge likely erased by the final turns.
+        info.lowest_prob * info.sums[s.actor] - (1. - info.lowest_prob) * s.penalty as f64
+            > [2., 4., 6.][style.min(2) as usize]
+    } else {
+        info.lowest_prob >= threshold
+    };
+    if s.stage == Stage::Idle && s.caller.is_none() && call_worthwhile {
         let me = s.actor;
         let min_other = (0..s.n())
             .filter(|&p| p != me)
@@ -436,6 +474,9 @@ pub(super) fn choose(s: &State, style: u8) -> Action {
 
 /// Learned continuations are separate from the frozen incumbent and root ranking.
 pub(super) fn rollout(s: &State, style: u8) -> Action {
+    if s.repeated_exchange_cycle() {
+        return Action::Draw;
+    }
     let active = match s.rollout_policy {
         1 => true,
         2 => s.actor != s.policy_player,
@@ -444,8 +485,11 @@ pub(super) fn rollout(s: &State, style: u8) -> Action {
     };
     if active && s.target == 100 && s.penalty == 10 {
         if let Some(model) = &s.policy_model {
+            if s.rollout_temperature > 0. {
+                return model.sample(s, s.policy_actions, s.rollout_temperature);
+            }
             return model.choose(s, s.policy_actions);
         }
     }
-    choose(s, style)
+    choose_mode(s, style, s.rollout_call)
 }

@@ -42,6 +42,18 @@ fn repeated_public_cycle(view: &PlayerView) -> bool {
 
 #[derive(Clone, Debug)]
 pub struct PlannerCfg {
+    /// Accept a final-response trade only when legal observations prove a unique match win.
+    pub proven_reset_trade: bool,
+    /// Sample learned continuation probabilities; 0 keeps deterministic argmax.
+    pub rollout_temperature: f64,
+    /// Do not interpret special-rule hand building as ordinary low-card preference.
+    pub rule_evidence: bool,
+    /// Break fully repeated observable exchange cycles inside simulations too.
+    pub rollout_cycles: bool,
+    /// Research ablation: cap expected immediate point loss of uncertain group trades; 0 off.
+    pub speculative_loss: f64,
+    /// Research continuation: expected-score Cabo timing instead of fixed confidence.
+    pub rollout_call: bool,
     /// Distilled action logits rank and initialize search edges; rollouts can stay frozen.
     pub policy_prior: bool,
     /// Optional PUCT exploration coefficient with softened distilled probabilities; 0 off.
@@ -95,6 +107,12 @@ pub struct PlannerCfg {
 impl Default for PlannerCfg {
     fn default() -> Self {
         Self {
+            proven_reset_trade: false,
+            rollout_temperature: 0.,
+            rule_evidence: false,
+            rollout_cycles: false,
+            speculative_loss: 0.,
+            rollout_call: false,
             policy_prior: false,
             policy_puct: 0.,
             rollout_policy: 0,
@@ -138,6 +156,7 @@ impl PlannerCfg {
 
     fn hard_with_model(model: Option<String>) -> Self {
         let mut cfg = Self {
+            proven_reset_trade: true,
             avoid_cycles: true,
             root_racing: false,
             budget_us: std::env::var("CABO_HARD_BUDGET_US")
@@ -159,6 +178,36 @@ impl PlannerCfg {
     }
     pub fn set(&mut self, key: &str, value: &str) -> bool {
         match key {
+            "proven_reset_trade" => match value {
+                "true" | "1" => Some(self.proven_reset_trade = true),
+                "false" | "0" => Some(self.proven_reset_trade = false),
+                _ => None,
+            },
+            "rollout_temperature" => value
+                .parse::<f64>()
+                .ok()
+                .filter(|v| v.is_finite() && (*v == 0.0 || (0.05..=4.0).contains(v)))
+                .map(|v| self.rollout_temperature = v),
+            "rule_evidence" => match value {
+                "true" | "1" => Some(self.rule_evidence = true),
+                "false" | "0" => Some(self.rule_evidence = false),
+                _ => None,
+            },
+            "rollout_cycles" => match value {
+                "true" | "1" => Some(self.rollout_cycles = true),
+                "false" | "0" => Some(self.rollout_cycles = false),
+                _ => None,
+            },
+            "speculative_loss" => value
+                .parse::<f64>()
+                .ok()
+                .filter(|v| v.is_finite() && (0.0..=20.0).contains(v))
+                .map(|v| self.speculative_loss = v),
+            "rollout_call" => match value {
+                "true" | "1" => Some(self.rollout_call = true),
+                "false" | "0" => Some(self.rollout_call = false),
+                _ => None,
+            },
             "policy_puct" => value
                 .parse::<f64>()
                 .ok()
@@ -460,19 +509,29 @@ impl PlannerBot {
         view: &PlayerView,
         rng: &mut dyn RngCore,
     ) -> Option<Vec<(Command, Vec<f32>)>> {
-        let mut sampler = Sampler::configured(
+        let mut sampler = Sampler::configured_with_rules(
             view,
             rng,
             self.cfg.use_evidence,
             self.cfg.blind_keep_evidence,
             self.cfg.behavioral_evidence,
             self.cfg.call_evidence,
+            self.cfg.rule_evidence,
         )?;
         sampler.template.special_tactics = self.cfg.special_tactics;
+        sampler.template.proven_reset_trade = self.cfg.proven_reset_trade;
+        sampler.template.speculative_loss = self.cfg.speculative_loss;
+        sampler.template.rollout_call = self.cfg.rollout_call;
+        sampler.template.exchange_cycle = self.cfg.rollout_cycles.then(Default::default);
         let s = &sampler.template;
         let info = policy::Info::new(s, s.actor, s.stage == Stage::Idle && s.caller.is_none());
-        Some(
+        let actions = if let Some(action) = special::proven_reset_trade(s) {
+            vec![(action, 1.0)]
+        } else {
             policy::ranked(s, self.cfg.max_actions)
+        };
+        Some(
+            actions
                 .into_iter()
                 .map(|(a, _)| (a.command(), action_policy::features(s, &info, &a).to_vec()))
                 .collect(),
@@ -517,24 +576,35 @@ impl PlannerBot {
                 report,
             );
         }
-        let Some(mut sampler) = Sampler::configured(
+        let Some(mut sampler) = Sampler::configured_with_rules(
             view,
             rng,
             self.cfg.use_evidence,
             self.cfg.blind_keep_evidence,
             self.cfg.behavioral_evidence,
             self.cfg.call_evidence,
+            self.cfg.rule_evidence,
         ) else {
             return report;
         };
         report.belief_ok = true;
         sampler.template.special_tactics = self.cfg.special_tactics;
+        sampler.template.proven_reset_trade = self.cfg.proven_reset_trade;
+        sampler.template.speculative_loss = self.cfg.speculative_loss;
+        sampler.template.rollout_call = self.cfg.rollout_call;
+        sampler.template.exchange_cycle = self.cfg.rollout_cycles.then(Default::default);
         sampler.template.value_model = self.value_model.clone();
         sampler.template.policy_model = self.policy_model.clone();
         sampler.template.rollout_policy = self.cfg.rollout_policy;
+        sampler.template.rollout_temperature = self.cfg.rollout_temperature;
         sampler.template.policy_player = me;
         sampler.template.policy_actions = self.cfg.policy_actions;
         sampler.template.reset_policy_player = self.cfg.probabilistic_reset.then_some(me);
+        if let Some(action) = special::proven_reset_trade(&sampler.template) {
+            report.command = action.command();
+            report.elapsed_us = start.elapsed().as_micros() as u64;
+            return report;
+        }
         if self.cfg.policy_only {
             report.command = self
                 .policy_model
@@ -589,7 +659,9 @@ impl PlannerBot {
             let mut expanded = false;
             let mut steps = 0;
             while s.stage != Stage::End && steps < 512 {
-                let action = if s.actor == me && !expanded && own_depth <= self.cfg.tree_depth {
+                let action = if s.repeated_exchange_cycle() {
+                    Action::Draw
+                } else if s.actor == me && !expanded && own_depth <= self.cfg.tree_depth {
                     let key = s.observation_key(me);
                     let ni = if let Some(&i) = keys.get(&key) {
                         i
@@ -687,18 +759,24 @@ impl PlannerBot {
             // A fresh chain and fresh worlds: evaluation data are not the samples used to pick
             // the challenger. Both branches share the exact world and the same opponent styles.
             chosen = incumbent.clone();
-            if let Some(mut confirm) = Sampler::configured(
+            if let Some(mut confirm) = Sampler::configured_with_rules(
                 view,
                 rng,
                 self.cfg.use_evidence,
                 self.cfg.blind_keep_evidence,
                 self.cfg.behavioral_evidence,
                 self.cfg.call_evidence,
+                self.cfg.rule_evidence,
             ) {
                 confirm.template.special_tactics = self.cfg.special_tactics;
+                confirm.template.proven_reset_trade = self.cfg.proven_reset_trade;
+                confirm.template.speculative_loss = self.cfg.speculative_loss;
+                confirm.template.rollout_call = self.cfg.rollout_call;
+                confirm.template.exchange_cycle = self.cfg.rollout_cycles.then(Default::default);
                 confirm.template.value_model = self.value_model.clone();
                 confirm.template.policy_model = self.policy_model.clone();
                 confirm.template.rollout_policy = self.cfg.rollout_policy;
+                confirm.template.rollout_temperature = self.cfg.rollout_temperature;
                 confirm.template.policy_player = me;
                 confirm.template.policy_actions = self.cfg.policy_actions;
                 confirm.template.reset_policy_player = self.cfg.probabilistic_reset.then_some(me);

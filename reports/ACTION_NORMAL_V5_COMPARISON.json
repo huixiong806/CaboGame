@@ -1,0 +1,86 @@
+{
+  "purpose": "Teacher prediction only, not match strength",
+  "device": "cuda",
+  "data": {
+    "action_rows": 136569,
+    "features": 64,
+    "groups": 11526,
+    "illegal_commands": 0,
+    "overrides": [
+      [
+        "simulations",
+        "32"
+      ],
+      [
+        "confirmation_samples",
+        "16"
+      ],
+      [
+        "validate_calls",
+        "false"
+      ],
+      [
+        "min_cabo_success",
+        "0.75"
+      ],
+      [
+        "avoid_cycles",
+        "true"
+      ],
+      [
+        "learned_value",
+        "false"
+      ]
+    ],
+    "rounds": 400,
+    "seconds": 265.1328431,
+    "seed_end": 880399,
+    "seed_start": 880000,
+    "teacher": "PlannerCfg { rule_evidence: false, rollout_cycles: false, speculative_loss: 0.0, rollout_call: false, policy_prior: false, policy_puct: 0.0, rollout_policy: 0, policy_model_path: \"data/action_policy/model-v1.bin\", policy_actions: 12, policy_only: false, avoid_cycles: true, learned_value: false, value_model_path: \"data/match_value/model-v1.bin\", root_racing: false, blind_keep_evidence: false, racing_actions: 12, probabilistic_reset: false, behavioral_evidence: false, match_cabo: false, call_evidence: false, validate_calls: false, budget_us: 0, simulations: 32, tree_depth: 6, max_actions: 64, exploration: 0.1, use_evidence: true, special_tactics: true, min_cabo_success: 0.75, confirmation_samples: 16, confirmation_t: 1.64, opponent_style: 4 }",
+    "data_sha256": "b699a1d3674a75057583ad14155fecf90dfd540baa845e690f5a3735639b2bc6"
+  },
+  "models": [
+    {
+      "model": "data/action_policy/model-v1.bin",
+      "sha256": "00dd6828ea49ea1c041ae72b95e85c0a9875196263f21b8495c900caa131dbe3",
+      "metrics": {
+        "cross_entropy": 0.5458149909973145,
+        "top1_equivalent": 0.8671214852475175,
+        "score_baseline_top1_equivalent": 0.7928678515020061,
+        "idle_accuracy": 0.8387467207639657,
+        "drew_accuracy": 0.9170906250593306,
+        "rounds": 400,
+        "groups": 11526,
+        "actions": 136569
+      }
+    },
+    {
+      "model": "data/action_policy/model-v4.bin",
+      "sha256": "ec4c248d56ee59bc8f7080f254c816e42c74e197f6897f958a52150cb4cef990",
+      "metrics": {
+        "cross_entropy": 0.5203946232795715,
+        "top1_equivalent": 0.8805669503759023,
+        "score_baseline_top1_equivalent": 0.7928678515020061,
+        "idle_accuracy": 0.8560831699047177,
+        "drew_accuracy": 0.9236839055913565,
+        "rounds": 400,
+        "groups": 11526,
+        "actions": 136569
+      }
+    },
+    {
+      "model": "data/action_policy/model-normal-v5.bin",
+      "sha256": "ea32c83b26d85daaa242c7fe241e6a1aae2ebf3f0ca6141f1be73c4899c38d5f",
+      "metrics": {
+        "cross_entropy": 0.42907387018203735,
+        "top1_equivalent": 0.9345435144002943,
+        "score_baseline_top1_equivalent": 0.7928678515020061,
+        "idle_accuracy": 0.9393955693356817,
+        "drew_accuracy": 0.925998843956192,
+        "rounds": 400,
+        "groups": 11526,
+        "actions": 136569
+      }
+    }
+  ]
+}

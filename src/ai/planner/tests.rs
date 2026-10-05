@@ -15,6 +15,427 @@ fn dealt(seed: u64, n: usize) -> Session {
 }
 
 #[test]
+#[ignore = "offline audit of speculative exchanges on complete real-engine rounds"]
+fn audit_speculative_exchanges() {
+    let mut cfg = PlannerCfg {
+        proven_reset_trade: false,
+        budget_us: 0,
+        simulations: 256,
+        confirmation_samples: 64,
+        ..PlannerCfg::hard_with_model(None)
+    };
+    for pair in std::env::var("CABO_AUDIT_CFG")
+        .unwrap_or_default()
+        .split(',')
+        .filter(|s| !s.is_empty())
+    {
+        let (k, v) = pair.split_once('=').unwrap();
+        assert!(cfg.set(k, v));
+    }
+    let bot = PlannerBot::new(cfg);
+    let mut decisions = 0;
+    let mut groups = 0;
+    let mut failed = 0;
+    for seed in 820000..820100 {
+        let mut s = dealt(seed, 4);
+        for (p, score) in s.players.iter_mut().zip([69, 57, 62, 26]) {
+            p.total_score = score;
+        }
+        let mut rng = StdRng::seed_from_u64(seed ^ 18371);
+        for _ in 0..2000 {
+            let Some(p) = s.actor() else { break };
+            let view = project(&s, Some(p), 0);
+            let report = bot.analyze(&view, &mut rng);
+            decisions += 1;
+            if let Command::SwapOnce { slots } | Command::DrawSwap { slots } = &report.command {
+                if slots.len() > 1 {
+                    groups += 1;
+                    let known: Vec<_> = slots
+                        .iter()
+                        .filter_map(|&i| view.all_seats[p].slots[i as usize].value)
+                        .collect();
+                    assert!(
+                        known.windows(2).all(|r| r[0] == r[1]),
+                        "AI selected a known mismatch"
+                    );
+                    let actual: Vec<_> = slots
+                        .iter()
+                        .map(|&i| s.cards[s.players[p].slots[i as usize] as usize].card.rank)
+                        .collect();
+                    if !actual.windows(2).all(|r| r[0] == r[1]) {
+                        failed += 1;
+                        let incoming = match view.panel {
+                            Panel::Drew { rank, .. } => Some(rank),
+                            _ => view.discard_ranks.last().copied(),
+                        };
+                        eprintln!("AUDIT seed={seed} p={p} visible={:?} command={:?} incoming={incoming:?} sims={} confirm={} gain={:.4} se={:.4} truth_after_choice={actual:?}", view.all_seats[p].slots.iter().map(|c| c.value).collect::<Vec<_>>(), report.command, report.simulations, report.confirmations, report.confirmed_gain, report.confirmed_se);
+                    }
+                }
+            }
+            s.apply(p, &report.command).unwrap();
+        }
+        assert!(matches!(s.phase, Phase::RoundEnd | Phase::GameOver { .. }));
+    }
+    eprintln!("AUDIT decisions={decisions} groups={groups} failures={failed}");
+}
+
+#[test]
+fn speculative_group_filter_is_observable_and_preserves_known_matches() {
+    let s = dealt(830001, 4);
+    let me = s.actor().unwrap();
+    let view = project(&s, Some(me), 0);
+    let mut sampler = Sampler::new(&view, &mut StdRng::seed_from_u64(19), true).unwrap();
+    let mut state = sampler.sample(&mut StdRng::seed_from_u64(23));
+    state.speculative_loss = 2.;
+    // Nonconserving, candidate-only fixture: no unseen rank is ever read.
+    let incoming = *state.discard.last().unwrap() as usize;
+    state.cards[incoming].rank = 9;
+    let mut info = policy::Info::new(&sampler.template, me, false);
+    info.values[me] = vec![Some(12), Some(12), None, None];
+    let actions = policy::candidates(&state, &info);
+    assert!(actions.contains(&Action::Exchange(vec![0, 1])));
+    assert!(!actions.contains(&Action::Exchange(vec![2, 3])));
+    for id in 0..state.cards.len() {
+        if state.visible(id as u8, me).is_none() {
+            state.cards[id].rank = ((id * 3 + 7) % 14) as u8;
+        }
+    }
+    assert_eq!(actions, policy::candidates(&state, &info));
+    state.cards[incoming].rank = 0;
+    assert!(policy::candidates(&state, &info).contains(&Action::Exchange(vec![2, 3])));
+    state.speculative_loss = 0.;
+    state.cards[incoming].rank = 9;
+    assert!(policy::candidates(&state, &info).contains(&Action::Exchange(vec![2, 3])));
+}
+
+#[test]
+fn risk_and_response_search_use_only_legal_information() {
+    for root_racing in [false, true] {
+        let bot = PlannerBot::new(PlannerCfg {
+            budget_us: 0,
+            simulations: 128,
+            confirmation_samples: 32,
+            speculative_loss: 2.,
+            rollout_call: true,
+            rollout_cycles: true,
+            rule_evidence: true,
+            root_racing,
+            ..PlannerCfg::hard_with_model(None)
+        });
+        for n in 2..=4 {
+            for drew in [false, true] {
+                let mut s = dealt(830900 + n as u64, n);
+                let me = s.actor().unwrap();
+                if drew {
+                    s.apply(me, &Command::BeginDraw).unwrap();
+                }
+                let mut changed = s.clone();
+                let unknown: Vec<_> = (0..s.cards.len())
+                    .filter(|&i| !s.cards[i].revealed && !s.cards[i].known_by.contains(&me))
+                    .collect();
+                let ranks: Vec<_> = unknown.iter().map(|&i| s.cards[i].card.rank).collect();
+                for (&id, rank) in unknown.iter().zip(ranks.iter().rev()) {
+                    changed.cards[id].card.rank = *rank;
+                }
+                let a = bot.analyze(&project(&s, Some(me), 0), &mut StdRng::seed_from_u64(19));
+                let b = bot.analyze(
+                    &project(&changed, Some(me), 0),
+                    &mut StdRng::seed_from_u64(19),
+                );
+                assert!(a.simulations > 0);
+                assert_eq!(
+                    (a.command.clone(), a.simulations, a.confirmations),
+                    (b.command, b.simulations, b.confirmations)
+                );
+                assert_eq!(
+                    a.candidates
+                        .iter()
+                        .map(|c| (c.visits, c.mean))
+                        .collect::<Vec<_>>(),
+                    b.candidates
+                        .iter()
+                        .map(|c| (c.visits, c.mean))
+                        .collect::<Vec<_>>()
+                );
+                s.apply(me, &a.command).unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn rollout_cycle_guard_requires_two_complete_public_cycles() {
+    let mut state = exact_state(&dealt(830911, 2));
+    let cycle = [(0, 1, 9, 8), (1, 2, 8, 9)];
+    state.exchange_cycle = Some(cycle.into_iter().collect());
+    assert!(!state.repeated_exchange_cycle());
+    state.exchange_cycle.as_mut().unwrap().extend(cycle);
+    assert!(state.repeated_exchange_cycle());
+    assert_eq!(policy::rollout(&state, 1), Action::Draw);
+    state.apply(&Action::Draw);
+    assert!(state.exchange_cycle.as_ref().unwrap().is_empty());
+    assert!(!state.repeated_exchange_cycle());
+    // Even the chosen guard action uses exactly the ordinary engine semantics.
+    let mut session = dealt(830911, 2);
+    let me = session.actor().unwrap();
+    session.apply(me, &Command::BeginDraw).unwrap();
+    assert_same(&state, &session);
+}
+
+#[test]
+fn failed_exchange_exposure_does_not_imply_prior_knowledge() {
+    let mut s = scoring_fixture(
+        &[
+            vec![5, 5, 12, 10],
+            vec![1, 2, 3, 4],
+            vec![6, 7, 8, 9],
+            vec![0, 1, 2, 3],
+        ],
+        &[62, 57, 26, 69],
+        &[false; 4],
+    );
+    for i in [2, 3] {
+        let id = s.players[0].slots[i] as usize;
+        s.cards[id].revealed = false;
+        s.cards[id].known_by.clear();
+    }
+    let before = project(&s, Some(0), 0);
+    assert_eq!(before.all_seats[0].slots[2].value, None);
+    assert_eq!(before.all_seats[0].slots[3].value, None);
+    let sampler = Sampler::new(&before, &mut StdRng::seed_from_u64(2), true).unwrap();
+    assert!(policy::ranked(&sampler.template, 64)
+        .iter()
+        .any(|(a, _)| *a == Action::Exchange(vec![2, 3])));
+    s.apply(0, &Command::SwapOnce { slots: vec![2, 3] })
+        .unwrap();
+    let after = project(&s, Some(0), 0);
+    assert_eq!(after.all_seats[0].slots[2].value, Some(12));
+    assert_eq!(after.all_seats[0].slots[3].value, Some(10));
+    assert_eq!(s.players[0].slots.len(), 5);
+    // Put the actor back on an ordinary legal turn: known mismatch is excluded.
+    s.discard.push(s.deck.pop().unwrap());
+    s.phase = Phase::Turn {
+        current: 0,
+        pending: None,
+    };
+    let sampler = Sampler::new(
+        &project(&s, Some(0), 0),
+        &mut StdRng::seed_from_u64(2),
+        true,
+    )
+    .unwrap();
+    assert!(policy::ranked(&sampler.template, 64)
+        .iter()
+        .any(|(a, _)| matches!(a, Action::Exchange(_))));
+    assert!(!policy::ranked(&sampler.template, 64)
+        .iter()
+        .any(|(a, _)| *a == Action::Exchange(vec![2, 3])));
+}
+
+#[test]
+#[ignore = "offline diagnosis of full-trajectory completion under identical observations"]
+fn audit_rollout_completion() {
+    let mut baseline = PlannerCfg::hard_with_model(None);
+    baseline.budget_us = 0;
+    baseline.simulations = 128;
+    baseline.confirmation_samples = 32;
+    let old = PlannerBot::new(baseline.clone());
+    baseline.rollout_cycles = true;
+    let new = PlannerBot::new(baseline);
+    let mut checks = 0;
+    let mut truncated = [0, 0];
+    let mut samples = [0u64, 0];
+    let mut us = [0u64, 0];
+    for seed in 834000..834030 {
+        let mut s = dealt(seed, 4);
+        let mut rng = StdRng::seed_from_u64(seed);
+        for step in 0..200 {
+            let Some(me) = s.actor() else { break };
+            let view = project(&s, Some(me), 0);
+            if step % 3 == 0 {
+                for (i, bot) in [&old, &new].into_iter().enumerate() {
+                    let r = bot.analyze(&view, &mut StdRng::seed_from_u64(seed ^ step));
+                    samples[i] += r.simulations as u64;
+                    truncated[i] += u64::from(r.simulations < 128);
+                    us[i] += r.elapsed_us;
+                }
+                checks += 1;
+            }
+            s.apply(me, &ChallengerBot.decide(&view, &mut rng)).unwrap();
+        }
+        assert!(matches!(s.phase, Phase::RoundEnd | Phase::GameOver { .. }));
+    }
+    eprintln!("COMPLETION checks={checks} early_stop={truncated:?} completed_samples={samples:?} total_us={us:?}");
+}
+
+#[test]
+fn special_rule_evidence_replay_matches_simulation_and_retains_ordinary_inference() {
+    for (total, used, relaxed) in [(80, false, true), (0, false, false), (80, true, false)] {
+        let mut session = dealt(839001, 4);
+        let actor = session.actor().unwrap();
+        session.players[actor].total_score = total;
+        session.players[actor].score_reset_used = used;
+        let mut sim = exact_state(&session);
+        sim.rule_evidence = true;
+        sim.apply(&Action::Draw);
+        session.apply(actor, &Command::BeginDraw).unwrap();
+        sim.apply(&Action::Discard(None));
+        session
+            .apply(actor, &Command::DiscardDrawn { power: None })
+            .unwrap();
+        assert_same(&sim, &session);
+        let me = session.actor().unwrap();
+        let view = project(&session, Some(me), 0);
+        let new = Sampler::configured_with_rules(
+            &view,
+            &mut StdRng::seed_from_u64(7),
+            true,
+            false,
+            false,
+            false,
+            true,
+        )
+        .unwrap();
+        let old = Sampler::new(&view, &mut StdRng::seed_from_u64(7), true).unwrap();
+        for slot in [0, 1] {
+            let before = old.template.cards[old.template.hands[actor][slot] as usize].log_weights;
+            let after = new.template.cards[new.template.hands[actor][slot] as usize].log_weights;
+            assert!(before.iter().any(|&w| w != 0.));
+            assert_eq!(after == [0.; 14], relaxed);
+            assert_eq!(
+                after,
+                sim.cards[sim.hands[actor][slot] as usize].log_weights
+            );
+            assert_eq!(
+                old.template.visible(old.template.hands[actor][slot], me),
+                new.template.visible(new.template.hands[actor][slot], me)
+            );
+        }
+    }
+}
+
+#[test]
+fn exported_action_features_keep_their_baseline_with_a_live_match_value_model() {
+    let session = scoring_fixture(
+        &[vec![5, 5, 0, 0], vec![1], vec![2]],
+        &[80, 70, 60],
+        &[false, true, false],
+    );
+    let mut state = exact_state(&session);
+    let info = policy::Info::new(&state, 0, true);
+    let before = action_policy::features(&state, &info, &Action::Cabo);
+    let score_before = policy::score(&state, &info, &Action::Cabo);
+    let mut weights = vec![0f32; 3425];
+    for i in [1, 256, 1312] {
+        weights[i] = 1.;
+    }
+    weights[3392] = 10.;
+    let mut bytes = b"CABOMV01".to_vec();
+    for w in weights {
+        bytes.extend(w.to_le_bytes());
+    }
+    state.value_model = Some(std::sync::Arc::new(
+        match_value::MatchValue::decode(&bytes).unwrap(),
+    ));
+    assert!((score_before - policy::score(&state, &info, &Action::Cabo)).abs() > 1.);
+    assert_eq!(
+        before,
+        action_policy::features(&state, &info, &Action::Cabo)
+    );
+    let bot = PlannerBot {
+        cfg: PlannerCfg {
+            learned_value: true,
+            ..PlannerCfg::default()
+        },
+        value_model: state.value_model.clone(),
+        policy_model: None,
+    };
+    let exported = bot
+        .policy_features(
+            &project(&session, Some(0), 0),
+            &mut StdRng::seed_from_u64(29),
+        )
+        .unwrap();
+    let row = exported
+        .iter()
+        .find(|(a, _)| *a == Command::CallCabo)
+        .unwrap();
+    assert_eq!(row.1, before.to_vec());
+}
+
+#[test]
+fn stochastic_policy_matches_its_probabilities_and_clones_paired_random_streams() {
+    let mut session = scoring_fixture(
+        &[vec![8, 9, 10, 11], vec![0, 1, 2, 3]],
+        &[0, 0],
+        &[false; 2],
+    );
+    session.apply(0, &Command::BeginDraw).unwrap();
+    let state = exact_state(&session);
+    let mut bytes = b"CABOPL01".to_vec();
+    bytes.resize(7500, 0);
+    let model = action_policy::ActionPolicy::decode(&bytes).unwrap();
+    let paired = state.clone();
+    for _ in 0..64 {
+        assert_eq!(model.sample(&state, 64, 1.), model.sample(&paired, 64, 1.));
+    }
+    let info = policy::Info::new(&state, 0, false);
+    let actions = policy::candidates(&state, &info);
+    let logits: Vec<_> = actions
+        .iter()
+        .map(|a| model.logit(&action_policy::features(&state, &info, a)) as f64)
+        .collect();
+    let top = logits.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let weights: Vec<_> = logits.iter().map(|v| (*v - top).exp()).collect();
+    let sum = weights.iter().sum::<f64>();
+    let mut counts = vec![0; actions.len()];
+    for _ in 0..4096 {
+        let a = model.sample(&state, 64, 1.);
+        counts[actions.iter().position(|b| *b == a).unwrap()] += 1;
+    }
+    for (count, w) in counts.into_iter().zip(weights) {
+        assert!((count as f64 / 4096. - w / sum).abs() < 0.05);
+    }
+}
+
+#[test]
+#[ignore = "local opponent policy/value models; actual Hard latency and engine legality"]
+fn local_opponent_policy_production_budget() {
+    let path = std::env::var("CABO_ACTION_POLICY_TEST")
+        .unwrap_or("data/action_policy/model-v1.bin".into());
+    let temperature = std::env::var("CABO_POLICY_TEMPERATURE_TEST")
+        .unwrap_or("0".into())
+        .parse()
+        .unwrap();
+    let mut cfg = PlannerCfg::hard_with_model(Some("data/match_value/model-v1.bin".into()));
+    cfg.rollout_policy = 2;
+    cfg.policy_model_path = path;
+    cfg.rollout_temperature = temperature;
+    cfg.budget_us = 600000;
+    let bot = PlannerBot::new(cfg);
+    for n in 2..=4 {
+        for drew in [false, true] {
+            let mut s = dealt(845000 + n as u64, n);
+            for (p, score) in s.players.iter_mut().zip([69, 57, 62, 26]) {
+                p.total_score = score;
+            }
+            let me = s.actor().unwrap();
+            if drew {
+                s.apply(me, &Command::BeginDraw).unwrap();
+            }
+            let report = bot.analyze(&project(&s, Some(me), 0), &mut StdRng::seed_from_u64(19));
+            assert!(report.elapsed_us < 1600000);
+            assert!(report.simulations <= 8192);
+            s.apply(me, &report.command).unwrap();
+            println!(
+                "OPPONENT_BUDGET n={n} drew={drew} us={} samples={} confirmations={}",
+                report.elapsed_us, report.simulations, report.confirmations
+            );
+        }
+    }
+}
+
+#[test]
 fn normal_frozen_decisions() {
     // Frozen on 3d6f668: exercise complete rounds, private draws, powers and late totals.
     let bot = PlannerBot::new(PlannerCfg {
@@ -144,6 +565,7 @@ fn action_learning_preserves_frozen_search_for_untrained_scoring_settings() {
                 rollout_policy: 1,
                 policy_prior: true,
                 policy_puct: 1.,
+                rollout_temperature: 1.,
                 ..cfg
             },
             value_model: None,
@@ -171,18 +593,20 @@ fn learned_action_search_uses_only_legal_information() {
     let path = std::env::var("CABO_ACTION_POLICY_TEST")
         .unwrap_or("data/action_policy/model-v1.bin".into());
     for racing in [false, true] {
-        for (mode, prior, puct) in [
-            (1, false, 0.),
-            (2, false, 0.),
-            (3, false, 0.),
-            (0, true, 0.),
-            (0, false, 1.),
+        for (mode, prior, puct, temperature) in [
+            (1, false, 0., 0.),
+            (2, false, 0., 0.),
+            (3, false, 0., 0.),
+            (0, true, 0., 0.),
+            (0, false, 1., 0.),
+            (2, false, 0., 1.),
         ] {
             let bot = PlannerBot::new(PlannerCfg {
                 policy_model_path: path.clone(),
                 rollout_policy: mode,
                 policy_prior: prior,
                 policy_puct: puct,
+                rollout_temperature: temperature,
                 budget_us: 0,
                 simulations: 48,
                 confirmation_samples: 16,
@@ -453,6 +877,13 @@ fn exact_state(s: &Session) -> State {
         _ => (0, Stage::End),
     };
     State {
+        proven_reset_trade: false,
+        rollout_temperature: 0.,
+        policy_random: std::array::from_fn(|_| std::cell::Cell::new(0)),
+        rule_evidence: false,
+        exchange_cycle: None,
+        speculative_loss: 0.,
+        rollout_call: false,
         cards: s
             .cards
             .iter()
@@ -740,6 +1171,186 @@ fn scoring_fixture(hands: &[Vec<u8>], totals: &[u32], used: &[bool]) -> Session 
         pending: None,
     };
     s
+}
+
+fn final_reset_trade_fixture(drew: bool, n: usize) -> Session {
+    let mut hands = vec![vec![4, 5, 6, 7], vec![0, 1], vec![3], vec![2]];
+    hands.truncate(n);
+    let mut s = scoring_fixture(&hands, &[69, 65, 98, 80][..n], &vec![false; n]);
+    s.phase = Phase::Turn {
+        current: 1,
+        pending: None,
+    };
+    s.apply(1, &Command::CallCabo).unwrap();
+    for actor in 2..n {
+        let i = s
+            .deck
+            .iter()
+            .position(|&id| s.cards[id as usize].card.rank == 9)
+            .unwrap();
+        let last = s.deck.len() - 1;
+        s.deck.swap(i, last);
+        s.apply(actor, &Command::BeginDraw).unwrap();
+        s.apply(actor, &Command::DiscardDrawn { power: None })
+            .unwrap();
+    }
+    if drew {
+        let i = s
+            .deck
+            .iter()
+            .position(|&id| s.cards[id as usize].card.rank == 9)
+            .unwrap();
+        let last = s.deck.len() - 1;
+        s.deck.swap(i, last);
+        s.apply(0, &Command::BeginDraw).unwrap();
+    }
+    assert_eq!(s.actor(), Some(0));
+    assert!(s.extra_turns.is_empty());
+    s
+}
+
+#[test]
+fn hard_proves_intentional_failure_wins_using_real_final_settlement() {
+    for n in 3..=4 {
+        for drew in [false, true] {
+            for racing in [false, true] {
+                let mut s = final_reset_trade_fixture(drew, n);
+                let view = project(&s, Some(0), 0);
+                let mut rng = StdRng::seed_from_u64(94823);
+                let cfg = PlannerCfg {
+                    root_racing: racing,
+                    budget_us: 0,
+                    simulations: 32,
+                    confirmation_samples: 16,
+                    ..PlannerCfg::hard_with_model(None)
+                };
+                let bot = PlannerBot::new(cfg);
+                let features = bot.policy_features(&view, &mut rng).unwrap();
+                let report = bot.analyze(&view, &mut rng);
+                let expected = if drew {
+                    Command::DrawSwap { slots: vec![0, 1] }
+                } else {
+                    Command::SwapOnce { slots: vec![0, 1] }
+                };
+                assert_eq!(report.command, expected);
+                assert_eq!(features.len(), 1);
+                assert_eq!(features[0].0, expected);
+                assert!(report.belief_ok);
+                assert_eq!(report.simulations, 0);
+                s.apply(0, &report.command).unwrap();
+                assert!(matches!(s.phase, Phase::GameOver { ref winners } if winners == &[0]));
+                assert_eq!(
+                    s.players.iter().map(|p| p.total_score).collect::<Vec<_>>(),
+                    &[50, 65, 101, 82][..n]
+                );
+                assert!(s.players[0].score_reset_used);
+                assert_eq!(s.players[0].slots.len(), 5);
+            }
+        }
+    }
+}
+
+#[test]
+fn proven_reset_trade_rejects_unknown_nonterminal_tied_or_used_opportunities() {
+    let base = final_reset_trade_fixture(false, 3);
+    let mut state = exact_state(&base);
+    state.proven_reset_trade = true;
+    assert_eq!(
+        special::proven_reset_trade(&state),
+        Some(Action::Exchange(vec![0, 1]))
+    );
+    let mut cases = Vec::new();
+    let mut s = state.clone();
+    s.proven_reset_trade = false;
+    cases.push(s);
+    let mut s = state.clone();
+    s.policy_player = 1;
+    cases.push(s);
+    let mut s = state.clone();
+    s.score_reset_used[0] = true;
+    cases.push(s);
+    let mut s = state.clone();
+    s.extra.push_back(2);
+    cases.push(s);
+    let mut s = state.clone();
+    s.totals[0] = 68;
+    cases.push(s);
+    let mut s = state.clone();
+    s.totals[1] = 50;
+    cases.push(s);
+    let mut s = state.clone();
+    s.totals[1] = 49;
+    cases.push(s);
+    let mut s = state.clone();
+    s.totals[1] = 99;
+    cases.push(s); // Preserving the current hand already uniquely wins.
+    let mut s = state.clone();
+    s.target = 200;
+    cases.push(s);
+    let mut s = state.clone();
+    s.totals[2] = 90;
+    cases.push(s);
+    let mut s = state.clone();
+    s.caller = None;
+    cases.push(s);
+    let mut s = state.clone();
+    s.caller = Some(0);
+    cases.push(s);
+    for p in 0..3 {
+        let mut s = state.clone();
+        let id = s.hands[p][0] as usize;
+        s.cards[id].revealed = false;
+        s.cards[id].known &= !1;
+        for rank in 0..14 {
+            s.cards[id].rank = rank;
+            assert_eq!(special::proven_reset_trade(&s), None, "hidden rank {rank}");
+        }
+        cases.push(s);
+    }
+    for s in cases {
+        assert_eq!(special::proven_reset_trade(&s), None);
+    }
+    let mut normal = state.clone();
+    normal.proven_reset_trade = PlannerCfg::default().proven_reset_trade;
+    let info = policy::Info::new(&normal, 0, false);
+    assert!(!policy::candidates(&normal, &info).contains(&Action::Exchange(vec![0, 1])));
+}
+
+#[test]
+fn hard_keeps_frozen_search_when_final_reset_cannot_be_proven() {
+    for n in 3..=4 {
+        for drew in [false, true] {
+            for racing in [false, true] {
+                let mut s = final_reset_trade_fixture(drew, n);
+                let id = s.players[1].slots[0] as usize;
+                s.cards[id].revealed = false;
+                s.cards[id].known_by = [1].into_iter().collect();
+                let view = project(&s, Some(0), 0);
+                let cfg = PlannerCfg {
+                    budget_us: 0,
+                    simulations: 32,
+                    confirmation_samples: 16,
+                    root_racing: racing,
+                    ..PlannerCfg::hard_with_model(None)
+                };
+                let mut old = cfg.clone();
+                old.proven_reset_trade = false;
+                let before = PlannerBot::new(old).analyze(&view, &mut StdRng::seed_from_u64(90812));
+                let after = PlannerBot::new(cfg).analyze(&view, &mut StdRng::seed_from_u64(90812));
+                assert_eq!(before.command, after.command);
+                assert_eq!(before.simulations, after.simulations);
+                assert_eq!(before.nodes, after.nodes);
+                assert_eq!(before.candidates.len(), after.candidates.len());
+                assert_eq!(before.confirmations, after.confirmations);
+                assert_eq!(before.confirmed_gain, after.confirmed_gain);
+                assert_eq!(before.confirmed_se, after.confirmed_se);
+                for (a, b) in before.candidates.iter().zip(&after.candidates) {
+                    assert_eq!(format!("{a:?}"), format!("{b:?}"));
+                }
+                s.apply(0, &after.command).unwrap();
+            }
+        }
+    }
 }
 
 #[test]

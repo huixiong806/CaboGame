@@ -7,6 +7,63 @@ fn known_hand(hand: &[Option<u8>]) -> Option<Vec<u8>> {
     hand.iter().copied().collect()
 }
 
+/// A deliberately failed trade can append the exact points needed for a reset.
+/// Force it only on the last Cabo response, when every hand is legally known
+/// and real settlement proves the actor will uniquely win the whole match.
+pub(super) fn proven_reset_trade(s: &State) -> Option<Action> {
+    let me = s.actor;
+    if !s.proven_reset_trade
+        || me != s.policy_player
+        || s.caller.is_none()
+        || s.caller == Some(me)
+        || !s.extra.is_empty()
+        || s.score_reset_used[me]
+    {
+        return None;
+    }
+    let incoming = match s.stage {
+        Stage::Idle => s.visible(*s.discard.last()?, me)?,
+        Stage::Drew(id) => s.visible(id, me)?,
+        Stage::End => return None,
+    };
+    let mut hands: Vec<Vec<u8>> = s
+        .hands
+        .iter()
+        .map(|hand| hand.iter().map(|&id| s.visible(id, me)).collect())
+        .collect::<Option<_>>()?;
+    if s.totals[me] + hands[me].iter().map(|&r| r as u32).sum::<u32>() + incoming as u32
+        != scoring::RESET_AT
+    {
+        return None;
+    }
+    let pair = (0..hands[me].len()).find_map(|i| {
+        (i + 1..hands[me].len())
+            .find(|&j| hands[me][i] != hands[me][j])
+            .map(|j| vec![i as u8, j as u8])
+    })?;
+    let unique_win = |totals: &[u32]| {
+        totals.iter().any(|&t| t >= s.target)
+            && totals
+                .iter()
+                .enumerate()
+                .all(|(p, &t)| p == me || totals[me] < t)
+    };
+    let before = scoring::settle(&hands, &s.totals, &s.score_reset_used, s.caller, s.penalty);
+    if unique_win(&before.totals) {
+        return None;
+    }
+    hands[me].push(incoming);
+    let after = scoring::settle(&hands, &s.totals, &s.score_reset_used, s.caller, s.penalty);
+    if !after.reset_triggered[me] || !unique_win(&after.totals) {
+        return None;
+    }
+    Some(match s.stage {
+        Stage::Idle => Action::Exchange(pair),
+        Stage::Drew(_) => Action::Replace(pair),
+        Stage::End => unreachable!(),
+    })
+}
+
 fn complete(hand: &[Option<u8>]) -> bool {
     hand.len() == 4
         && hand.iter().filter(|&&r| r == Some(12)).count() == 2

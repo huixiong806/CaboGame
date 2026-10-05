@@ -35,9 +35,12 @@ D:/miniconda3/envs/py311/python.exe tools/train_action_policy.py --train data/ac
 - `policy_model_path` 明确指定动作模型；开关启用而模型缺失/损坏时构造失败。
 - `policy_only=true` 直接用网络行动，用于检验速度与误差积累。`policy_actions` 默认筛选原评分前 12 个，始终保留摸牌、宣告、弃置；设 64 比较完整候选。
 - `rollout_policy=1/2/3` 分别替换所有玩家/对手/自身后续模拟行动。模拟玩家的动作使用该玩家的知识；网络策略没有原来的风格差异。
+- `rollout_temperature=0` 保留旧 argmax；正值以该温度从 softmax 采样续招。每座位有独立随机流，独立复核的两个分支共享克隆后的流；这是默认关闭的研究项。
 - `policy_prior=true` 在搜索节点用学习 logit 排序动作和初始化边价值，保留原 UCT、快策略 incumbent 和独立复核；不替换 rollout。
 - `policy_puct=1` 改用动作概率引导树搜索分配，logit 温度 2、10% 均匀探索成分。它是独立实验；根动作 racing 只使用网络排序，PUCT 系数不改变 racing 分配。
 
 默认所有新开关关闭。模型准确率、预测损失和搜索轨迹数量均不能代替完整比赛验收，训练教师的能力也不是学习策略能超过的上界证明。实战结果见 [本轮报告](reports/HARD_POLICY_ITERATION_RESULTS.md)。
+
+后续 Normal 专用对手教师为 32/16、无整局价值、无普通宣告复核，另采集 1,800/400/400 个训练/验证/测试回合。V5 及随机续招评估见 [后续报告](reports/HARD_BLIND_AND_OPPONENT_RESULTS.md)。动作特征 55 与候选短名单固定使用训练时的评分基准；运行时整局价值和概率凑满分开关不会改变其含义，真实搜索效用仍照常使用这些配置。
 
 训练器支持 `--extra-train/validation/test` 和 `--extra-weight`。新增域必须同样按完整回合分割，六个文件的 seed 都互不重叠；按指定权重均衡两个域的完整回合，混合验证损失选择 checkpoint，同时单独报告各域指标。正式模型也拒绝覆盖，以免修改正在评估的冻结权重。

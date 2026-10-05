@@ -48,6 +48,14 @@ impl Action {
 
 #[derive(Clone)]
 pub(super) struct State {
+    pub proven_reset_trade: bool,
+    pub rollout_temperature: f64,
+    pub policy_random: [std::cell::Cell<u64>; 4],
+    pub rule_evidence: bool,
+    /// Only public single-discard exchanges, cleared on any other event.
+    pub exchange_cycle: Option<VecDeque<(usize, u8, u8, u8)>>,
+    pub speculative_loss: f64,
+    pub rollout_call: bool,
     pub cards: Vec<Card>,
     pub hands: Vec<Vec<u8>>,
     pub deck: Vec<u8>,
@@ -134,6 +142,18 @@ pub(super) fn call_threshold(
     Some(((4.5 * rival_size as f32 - 6.5 * unknown as f32 - 2.0) / known as f32).clamp(0.0, 13.0))
 }
 
+pub(super) fn non_greedy_possible(
+    total: u32,
+    used: bool,
+    size: usize,
+    known: usize,
+    penalty: u32,
+) -> bool {
+    let reset = crate::game::scoring::RESET_AT;
+    (!used && total < reset && total + 13 * size as u32 + penalty >= reset)
+        || (size == 4 && known >= 3)
+}
+
 impl State {
     pub fn n(&self) -> usize {
         self.hands.len()
@@ -151,16 +171,66 @@ impl State {
     }
 
     fn event(&mut self, event: PublicEvent) {
+        let cap = 2 * self.n() * (self.n() + 1);
+        if let Some(history) = &mut self.exchange_cycle {
+            match &event {
+                PublicEvent::Exchange {
+                    player,
+                    source: Pile::Discard,
+                    slots,
+                    exposed,
+                    incoming: Some(rank),
+                    success: true,
+                } if slots.len() == 1 && exposed.len() == 1 => {
+                    history.push_back((*player, slots[0], exposed[0], *rank));
+                    if history.len() > cap {
+                        history.pop_front();
+                    }
+                }
+                _ => history.clear(),
+            }
+        }
         let mut h = DefaultHasher::new();
         self.public_hash.hash(&mut h);
         event.hash(&mut h);
         self.public_hash = h.finish();
     }
 
+    pub fn repeated_exchange_cycle(&self) -> bool {
+        if self.stage != Stage::Idle || self.deck.is_empty() {
+            return false;
+        }
+        let Some(history) = &self.exchange_cycle else {
+            return false;
+        };
+        (1..=self.n() + 1).any(|turns| {
+            let period = turns * self.n();
+            if history.len() < 2 * period {
+                return false;
+            }
+            let start = history.len() - 2 * period;
+            (0..period).all(|i| history[start + i] == history[start + period + i])
+        })
+    }
+
     pub fn apply(&mut self, action: &Action) {
         let p = self.actor;
+        let non_greedy = self.rule_evidence
+            && non_greedy_possible(
+                self.totals[p],
+                self.score_reset_used[p],
+                self.hands[p].len(),
+                self.hands[p]
+                    .iter()
+                    .filter(|&&id| self.cards[id as usize].known & (1 << p) != 0)
+                    .count(),
+                self.penalty,
+            );
         match action {
             Action::Draw => {
+                if let Some(history) = &mut self.exchange_cycle {
+                    history.clear();
+                }
                 assert_eq!(self.stage, Stage::Idle);
                 let cid = self.deck.pop().expect("nonempty deck");
                 self.cards[cid as usize].known |= 1 << p;
@@ -206,7 +276,7 @@ impl State {
                         self.cards[old as usize].revealed = true;
                         self.discard.push(old);
                     }
-                    if slots.len() == 1 && previously_known {
+                    if slots.len() == 1 && previously_known && !non_greedy {
                         for &id in &self.hands[p] {
                             if self.cards[id as usize].known & (1 << p) != 0 {
                                 survival_evidence(
@@ -229,12 +299,13 @@ impl State {
                     // evidence has no meaning for a rank already known to every seat.
                     self.cards[taken as usize].log_weights = [0.0; 14];
                 }
-                if source == Pile::Draw && success && previously_known {
+                if source == Pile::Draw && success && previously_known && !non_greedy {
                     keep_evidence(
                         &mut self.cards[taken as usize].log_weights,
                         ranks.iter().map(|&r| r as f32).sum(),
                     );
                 } else if self.blind_keep_evidence
+                    && !non_greedy
                     && source == Pile::Draw
                     && success
                     && slots.len() == 1
@@ -277,7 +348,7 @@ impl State {
                         } => {
                             let a = self.hands[p][my_slot as usize];
                             let b = self.hands[player][slot as usize];
-                            if self.behavioral_evidence {
+                            if self.behavioral_evidence && !non_greedy {
                                 let ca = self.cards[a as usize];
                                 let cb = self.cards[b as usize];
                                 if ca.known & (1 << p) != 0 {
@@ -303,7 +374,8 @@ impl State {
                         player: p,
                         power: *power,
                     });
-                    if self.behavioral_evidence && self.cards[cid as usize].rank >= 9 {
+                    if self.behavioral_evidence && self.cards[cid as usize].rank >= 9 && !non_greedy
+                    {
                         let r = (self.cards[cid as usize].rank + 2).min(13);
                         for &id in &self.hands[p] {
                             if self.cards[id as usize].known & (1 << p) != 0 {
@@ -311,7 +383,7 @@ impl State {
                             }
                         }
                     }
-                } else {
+                } else if !non_greedy {
                     let r = self.cards[cid as usize].rank;
                     for &id in &self.hands[p] {
                         if self.cards[id as usize].known & (1 << p) != 0 {
@@ -332,7 +404,7 @@ impl State {
             Action::Cabo => {
                 assert_eq!(self.stage, Stage::Idle);
                 assert!(self.caller.is_none());
-                if self.call_evidence {
+                if self.call_evidence && !non_greedy {
                     let known = self.hands[p]
                         .iter()
                         .filter(|&&id| self.cards[id as usize].known & (1 << p) != 0)

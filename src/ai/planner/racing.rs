@@ -62,24 +62,35 @@ pub(super) fn analyze(
     mut report: DecisionReport,
 ) -> DecisionReport {
     let me = view.me.unwrap();
-    let Some(mut sampler) = Sampler::configured(
+    let Some(mut sampler) = Sampler::configured_with_rules(
         view,
         rng,
         cfg.use_evidence,
         cfg.blind_keep_evidence,
         cfg.behavioral_evidence,
         cfg.call_evidence,
+        cfg.rule_evidence,
     ) else {
         return report;
     };
     sampler.template.special_tactics = cfg.special_tactics;
+    sampler.template.proven_reset_trade = cfg.proven_reset_trade;
+    sampler.template.speculative_loss = cfg.speculative_loss;
+    sampler.template.rollout_call = cfg.rollout_call;
+    sampler.template.exchange_cycle = cfg.rollout_cycles.then(Default::default);
     sampler.template.value_model = value_model.clone();
     sampler.template.policy_model = policy_model.clone();
     sampler.template.rollout_policy = cfg.rollout_policy;
+    sampler.template.rollout_temperature = cfg.rollout_temperature;
     sampler.template.policy_player = me;
     sampler.template.policy_actions = cfg.policy_actions;
     sampler.template.reset_policy_player = cfg.probabilistic_reset.then_some(me);
     report.belief_ok = true;
+    if let Some(action) = special::proven_reset_trade(&sampler.template) {
+        report.command = action.command();
+        report.elapsed_us = start.elapsed().as_micros() as u64;
+        return report;
+    }
     let special_call = special::call_relevant(&sampler.template);
     let fast = policy::choose(&sampler.template, 1);
     let incumbent = if cfg.validate_calls
@@ -187,18 +198,24 @@ pub(super) fn analyze(
     let mut chosen = proposal.clone();
     if cfg.confirmation_samples > 0 && proposal != incumbent {
         chosen = incumbent.clone();
-        if let Some(mut fresh) = Sampler::configured(
+        if let Some(mut fresh) = Sampler::configured_with_rules(
             view,
             rng,
             cfg.use_evidence,
             cfg.blind_keep_evidence,
             cfg.behavioral_evidence,
             cfg.call_evidence,
+            cfg.rule_evidence,
         ) {
             fresh.template.special_tactics = cfg.special_tactics;
+            fresh.template.proven_reset_trade = cfg.proven_reset_trade;
+            fresh.template.speculative_loss = cfg.speculative_loss;
+            fresh.template.rollout_call = cfg.rollout_call;
+            fresh.template.exchange_cycle = cfg.rollout_cycles.then(Default::default);
             fresh.template.value_model = value_model.clone();
             fresh.template.policy_model = policy_model.clone();
             fresh.template.rollout_policy = cfg.rollout_policy;
+            fresh.template.rollout_temperature = cfg.rollout_temperature;
             fresh.template.policy_player = me;
             fresh.template.policy_actions = cfg.policy_actions;
             fresh.template.reset_policy_player = cfg.probabilistic_reset.then_some(me);

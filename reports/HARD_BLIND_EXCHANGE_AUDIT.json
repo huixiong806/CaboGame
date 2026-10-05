@@ -1,0 +1,44 @@
+{
+  "purpose": "Diagnostic only; failed multi-card trades do not by themselves establish a strength regression or a prior-knowledge bug.",
+  "engine": "real Session, strict apply without fallback",
+  "players": 4,
+  "seed_start": 820000,
+  "seed_end": 820099,
+  "rounds_per_configuration": 100,
+  "initial_public_scores": [
+    69,
+    57,
+    62,
+    26
+  ],
+  "all_seats": "same tested planner; initial peek slots 0 and 1",
+  "base_configuration": {
+    "budget_us": 0,
+    "simulations": 256,
+    "confirmation_samples": 64,
+    "hard_value_model": null,
+    "proven_reset_trade": false
+  },
+  "baseline": {
+    "decisions": 2684,
+    "multi_card_trades": 343,
+    "failed_multi_card_trades": 191,
+    "known_rank_mismatches_before_choice": 0
+  },
+  "experimental_risk_response_cycle": {
+    "overrides": "speculative_loss=2,rollout_call=true,rollout_cycles=true",
+    "decisions": 3131,
+    "multi_card_trades": 225,
+    "failed_multi_card_trades": 58,
+    "known_rank_mismatches_before_choice": 0
+  },
+  "interpretation": "Counts describe divergent self-play trajectories. Fewer failed trades is not evidence of higher match win rate. Ground-truth ranks were read only by the offline diagnostic after the command had been chosen; they were never supplied to the planner. The screenshot's exact prior knowledge cannot be recovered from its post-exposure display.",
+  "reproduce": "cargo test --release --lib audit_speculative_exchanges -- --ignored --nocapture; experimental overrides through CABO_AUDIT_CFG",
+  "cycle_diagnostic": {
+    "checks": 447,
+    "baseline_early_stops": 0,
+    "cycle_guard_early_stops": 0,
+    "completed_samples_each": 57216,
+    "interpretation": "This observation set did not encounter a rollout cycle; it cannot demonstrate improved sampling throughput from the new guard."
+  }
+}
