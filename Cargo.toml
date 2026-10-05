@@ -33,6 +33,10 @@ path = "src/bin/eval.rs"
 name = "cabo-match-data"
 path = "src/bin/match_data.rs"
 
+[[bin]]
+name = "cabo-policy-data"
+path = "src/bin/policy_data.rs"
+
 [dependencies]
 axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "signal"] }

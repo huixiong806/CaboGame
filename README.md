@@ -17,6 +17,8 @@ Hard 的学习路线、真实引擎自我对弈和本地价值网络实验见 [H
 
 本轮配对对局、学习指标、未晋升候选与防循环修复的结果见 [HARD_ITERATION_RESULTS.md](reports/HARD_ITERATION_RESULTS.md)。
 
+后续当前回合动作学习与搜索策略蒸馏见 [ACTION_POLICY_LEARNING.md](ACTION_POLICY_LEARNING.md)，新一轮独立对照见 [HARD_POLICY_ITERATION_RESULTS.md](reports/HARD_POLICY_ITERATION_RESULTS.md)。这些动作模型接入默认关闭，Normal 保持稳定。
+
 旧简单 AI、旧战术 AI、v2 和无学习组件的独立入口，以及旧训练/实验工具，已归档到 [历史备份分支](https://github.com/huixiong806/CaboGame/tree/codex/archive-legacy-ai-20261004)。该分支保存清理前的源码、文本权重与报告；二进制训练数据只保留在本机。
 
 当前网页对局尚未持久化录制，也不会在线训练；离线评估结果不能替代真人对局验证。

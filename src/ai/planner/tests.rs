@@ -52,6 +52,240 @@ fn normal_frozen_decisions() {
 }
 
 #[test]
+fn action_features_do_not_read_sampled_hidden_ranks_or_card_ids() {
+    let mut rng = StdRng::seed_from_u64(81000);
+    for n in 2..=4 {
+        for drew in [false, true] {
+            let mut session = dealt(81000 + n as u64, n);
+            let me = session.actor().unwrap();
+            if drew {
+                session.apply(me, &Command::BeginDraw).unwrap();
+            }
+            let view = project(&session, Some(me), 0);
+            let mut sampler = Sampler::new(&view, &mut rng, true).unwrap();
+            let world = sampler.sample(&mut rng);
+            let observation = policy::Info::new(
+                &world,
+                me,
+                world.stage == Stage::Idle && world.caller.is_none(),
+            );
+            let actions = policy::candidates(&world, &observation);
+            let original: Vec<_> = actions
+                .iter()
+                .map(|a| action_policy::features(&world, &observation, a))
+                .collect();
+            let mut changed = world.clone();
+            for id in 0..changed.cards.len() {
+                if changed.visible(id as u8, me).is_none() {
+                    changed.cards[id].rank = ((id * 7 + 3) % 14) as u8;
+                }
+            }
+            let info = policy::Info::new(
+                &changed,
+                me,
+                world.stage == Stage::Idle && world.caller.is_none(),
+            );
+            for (a, before) in actions.iter().zip(original) {
+                let after = action_policy::features(&changed, &info, a);
+                assert_eq!(before, after);
+                assert!(after.iter().all(|x| x.is_finite()));
+            }
+            let sample2 = sampler.sample(&mut rng);
+            let info2 = policy::Info::new(
+                &sample2,
+                me,
+                world.stage == Stage::Idle && world.caller.is_none(),
+            );
+            for a in &actions {
+                assert_eq!(
+                    action_policy::features(&world, &observation, a),
+                    action_policy::features(&sample2, &info2, a)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn action_policy_opt_in_requires_a_valid_model_and_leaves_normal_off() {
+    assert_eq!(PlannerCfg::default().rollout_policy, 0);
+    assert!(!PlannerCfg::default().policy_only);
+    assert!(PlannerBot::try_new(PlannerCfg {
+        rollout_policy: 1,
+        policy_model_path: "data/missing-policy.bin".into(),
+        ..PlannerCfg::default()
+    })
+    .is_err());
+    assert!(PlannerBot::try_new(PlannerCfg {
+        policy_only: true,
+        policy_model_path: "data/missing-policy.bin".into(),
+        ..PlannerCfg::default()
+    })
+    .is_err());
+}
+
+#[test]
+fn action_learning_preserves_frozen_search_for_untrained_scoring_settings() {
+    let mut bytes = b"CABOPL01".to_vec();
+    bytes.resize(7500, 0);
+    let model = std::sync::Arc::new(action_policy::ActionPolicy::decode(&bytes).unwrap());
+    for racing in [false, true] {
+        let cfg = PlannerCfg {
+            budget_us: 0,
+            simulations: 48,
+            confirmation_samples: 16,
+            root_racing: racing,
+            racing_actions: 4,
+            ..PlannerCfg::default()
+        };
+        let baseline = PlannerBot::new(cfg.clone());
+        let learned = PlannerBot {
+            cfg: PlannerCfg {
+                rollout_policy: 1,
+                policy_prior: true,
+                policy_puct: 1.,
+                ..cfg
+            },
+            value_model: None,
+            policy_model: Some(model.clone()),
+        };
+        for (target, penalty) in [(80, 10), (100, 15)] {
+            let mut s = dealt(81300, 3);
+            s.settings.target_score = target;
+            s.settings.cabo_penalty = penalty;
+            let view = project(&s, Some(s.actor().unwrap()), 0);
+            let old = baseline.analyze(&view, &mut StdRng::seed_from_u64(47));
+            let new = learned.analyze(&view, &mut StdRng::seed_from_u64(47));
+            assert_eq!(old.command, new.command);
+            assert_eq!(old.simulations, new.simulations);
+            for (a, b) in old.candidates.iter().zip(&new.candidates) {
+                assert_eq!((a.visits, a.mean), (b.visits, b.mean));
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires local action-policy model; verifies complete learned-rollout searches"]
+fn learned_action_search_uses_only_legal_information() {
+    let path = std::env::var("CABO_ACTION_POLICY_TEST")
+        .unwrap_or("data/action_policy/model-v1.bin".into());
+    for racing in [false, true] {
+        for (mode, prior, puct) in [
+            (1, false, 0.),
+            (2, false, 0.),
+            (3, false, 0.),
+            (0, true, 0.),
+            (0, false, 1.),
+        ] {
+            let bot = PlannerBot::new(PlannerCfg {
+                policy_model_path: path.clone(),
+                rollout_policy: mode,
+                policy_prior: prior,
+                policy_puct: puct,
+                budget_us: 0,
+                simulations: 48,
+                confirmation_samples: 16,
+                root_racing: racing,
+                racing_actions: 4,
+                ..PlannerCfg::default()
+            });
+            let mut session = dealt(81100, 3);
+            let me = session.actor().unwrap();
+            session.apply(me, &Command::BeginDraw).unwrap();
+            let first = bot.analyze(
+                &project(&session, Some(me), 0),
+                &mut StdRng::seed_from_u64(41),
+            );
+            assert!(
+                first.simulations > 0,
+                "learned rollout must reach actual round settlement"
+            );
+            for card in &mut session.cards {
+                if !card.revealed && !card.known_by.contains(&me) {
+                    card.card.rank = 13;
+                }
+            }
+            let second = bot.analyze(
+                &project(&session, Some(me), 0),
+                &mut StdRng::seed_from_u64(41),
+            );
+            assert_eq!(first.command, second.command);
+            assert_eq!(first.simulations, second.simulations);
+            assert_eq!(first.candidates.len(), second.candidates.len());
+            for (a, b) in first.candidates.iter().zip(&second.candidates) {
+                assert_eq!((a.visits, a.mean), (b.visits, b.mean));
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires local action model; checks time bounds and real-engine legality"]
+fn local_action_policy_budget_and_games() {
+    let path = std::env::var("CABO_ACTION_POLICY_TEST")
+        .unwrap_or("data/action_policy/model-v1.bin".into());
+    for n in 2..=4 {
+        let direct = PlannerBot::new(PlannerCfg {
+            policy_only: true,
+            policy_actions: 64,
+            policy_model_path: path.clone(),
+            avoid_cycles: true,
+            ..PlannerCfg::default()
+        });
+        let mut session = dealt(81200 + n as u64, n);
+        let mut rng = StdRng::seed_from_u64(43);
+        for _ in 0..10000 {
+            match session.phase {
+                Phase::Turn { current, .. } => {
+                    let c = direct.decide(&project(&session, Some(current), 0), &mut rng);
+                    session.apply(current, &c).unwrap();
+                }
+                Phase::RoundEnd => {
+                    session.next_round().unwrap();
+                    for p in 0..n {
+                        session
+                            .apply(p, &Command::PeekInitial { slots: [0, 1] })
+                            .unwrap();
+                    }
+                }
+                Phase::GameOver { .. } => break,
+                _ => unreachable!(),
+            }
+        }
+        assert!(matches!(session.phase, Phase::GameOver { .. }));
+        for (mode, prior, puct) in [
+            (1, false, 0.),
+            (3, false, 0.),
+            (0, true, 0.),
+            (0, false, 1.),
+        ] {
+            let bot = PlannerBot::new(PlannerCfg {
+                policy_model_path: path.clone(),
+                rollout_policy: mode,
+                policy_prior: prior,
+                policy_puct: puct,
+                budget_us: 600000,
+                ..PlannerCfg::hard_with_model(None)
+            });
+            let mut s = dealt(81230 + n as u64, n);
+            let actor = s.actor().unwrap();
+            s.apply(actor, &Command::BeginDraw).unwrap();
+            let start = Instant::now();
+            let report = bot.analyze(&project(&s, Some(actor), 0), &mut rng);
+            assert!(start.elapsed() < std::time::Duration::from_millis(1600));
+            assert!(report.simulations > 0);
+            s.apply(actor, &report.command).unwrap();
+            println!(
+                "n={n} scope={mode} prior={prior} puct={puct} ms={:.1} sims={}",
+                report.elapsed_us as f64 / 1000.,
+                report.simulations
+            );
+        }
+    }
+}
+
+#[test]
 fn hard_breaks_a_repeated_public_rotation_but_preserves_one_cycle() {
     let mut s = dealt(530200, 2);
     let me = s.actor().unwrap();
@@ -244,6 +478,10 @@ fn exact_state(s: &Session) -> State {
         behavioral_evidence: false,
         call_evidence: false,
         value_model: None,
+        policy_model: None,
+        rollout_policy: 0,
+        policy_player: actor,
+        policy_actions: 12,
         round_scores: s
             .players
             .iter()

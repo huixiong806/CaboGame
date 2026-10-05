@@ -1,0 +1,1524 @@
+{
+  "device": "cuda",
+  "parameters": 1873,
+  "features": 64,
+  "selected_epoch": 29,
+  "epochs": 100,
+  "data": [
+    {
+      "action_rows": 427978,
+      "features": 64,
+      "groups": 39627,
+      "illegal_commands": 0,
+      "overrides": [
+        [
+          "learned_value",
+          "true"
+        ],
+        [
+          "value_model_path",
+          "data/match_value/model-v1.bin"
+        ]
+      ],
+      "rounds": 1200,
+      "seconds": 226.4541721,
+      "seed_end": 701199,
+      "seed_start": 700000,
+      "teacher": "PlannerCfg { rollout_policy: 0, policy_model_path: \"data/action_policy/model-v1.bin\", policy_actions: 12, policy_only: false, avoid_cycles: true, learned_value: true, value_model_path: \"data/match_value/model-v1.bin\", root_racing: false, blind_keep_evidence: false, racing_actions: 12, probabilistic_reset: false, behavioral_evidence: false, match_cabo: false, call_evidence: false, validate_calls: true, budget_us: 0, simulations: 128, tree_depth: 6, max_actions: 64, exploration: 0.1, use_evidence: true, special_tactics: true, min_cabo_success: 0.0, confirmation_samples: 32, confirmation_t: 1.64, opponent_style: 4 }",
+      "data_sha256": "1b419acaa766224bcb28b259c636e1cf3d2bd0e813ccf3c178eb94a78e97702e"
+    },
+    {
+      "action_rows": 110361,
+      "features": 64,
+      "groups": 10482,
+      "illegal_commands": 0,
+      "overrides": [
+        [
+          "learned_value",
+          "true"
+        ],
+        [
+          "value_model_path",
+          "data/match_value/model-v1.bin"
+        ]
+      ],
+      "rounds": 300,
+      "seconds": 122.5128232,
+      "seed_end": 710299,
+      "seed_start": 710000,
+      "teacher": "PlannerCfg { rollout_policy: 0, policy_model_path: \"data/action_policy/model-v1.bin\", policy_actions: 12, policy_only: false, avoid_cycles: true, learned_value: true, value_model_path: \"data/match_value/model-v1.bin\", root_racing: false, blind_keep_evidence: false, racing_actions: 12, probabilistic_reset: false, behavioral_evidence: false, match_cabo: false, call_evidence: false, validate_calls: true, budget_us: 0, simulations: 128, tree_depth: 6, max_actions: 64, exploration: 0.1, use_evidence: true, special_tactics: true, min_cabo_success: 0.0, confirmation_samples: 32, confirmation_t: 1.64, opponent_style: 4 }",
+      "data_sha256": "8ce123ae7aed6477de6c43c3431caaf2f42797a6960ef049d66d90aeafccb758"
+    },
+    {
+      "action_rows": 111266,
+      "features": 64,
+      "groups": 10892,
+      "illegal_commands": 0,
+      "overrides": [
+        [
+          "learned_value",
+          "true"
+        ],
+        [
+          "value_model_path",
+          "data/match_value/model-v1.bin"
+        ]
+      ],
+      "rounds": 300,
+      "seconds": 125.2003854,
+      "seed_end": 720299,
+      "seed_start": 720000,
+      "teacher": "PlannerCfg { rollout_policy: 0, policy_model_path: \"data/action_policy/model-v1.bin\", policy_actions: 12, policy_only: false, avoid_cycles: true, learned_value: true, value_model_path: \"data/match_value/model-v1.bin\", root_racing: false, blind_keep_evidence: false, racing_actions: 12, probabilistic_reset: false, behavioral_evidence: false, match_cabo: false, call_evidence: false, validate_calls: true, budget_us: 0, simulations: 128, tree_depth: 6, max_actions: 64, exploration: 0.1, use_evidence: true, special_tactics: true, min_cabo_success: 0.0, confirmation_samples: 32, confirmation_t: 1.64, opponent_style: 4 }",
+      "data_sha256": "0ce8ae47fde44153a6ed74c1dcc9a7d760b4dde4a38092ce1626debc08d796f2"
+    }
+  ],
+  "metrics": {
+    "train": {
+      "cross_entropy": 0.48301416635513306,
+      "top1_equivalent": 0.8886153600161321,
+      "score_baseline_top1_equivalent": 0.7794033404886342,
+      "idle_accuracy": 0.866941547092843,
+      "drew_accuracy": 0.9245713858406986,
+      "rounds": 1200,
+      "groups": 39627,
+      "actions": 427978
+    },
+    "validation": {
+      "cross_entropy": 0.52230304479599,
+      "top1_equivalent": 0.8760691609283123,
+      "score_baseline_top1_equivalent": 0.7724569593900081,
+      "idle_accuracy": 0.8506782551647541,
+      "drew_accuracy": 0.9168712690329761,
+      "rounds": 300,
+      "groups": 10482,
+      "actions": 110361
+    },
+    "test": {
+      "cross_entropy": 0.5314258933067322,
+      "top1_equivalent": 0.8741160210144009,
+      "score_baseline_top1_equivalent": 0.7824670635906116,
+      "idle_accuracy": 0.8491570775220589,
+      "drew_accuracy": 0.9156651791222828,
+      "rounds": 300,
+      "groups": 10892,
+      "actions": 111266
+    }
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "train_cross_entropy": 0.5028110517594414,
+      "validation": {
+        "cross_entropy": 0.5268581509590149,
+        "top1_equivalent": 0.8791840276652387,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8572687049403672,
+        "drew_accuracy": 0.9144010213123174,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 2,
+      "train_cross_entropy": 0.5022974190718112,
+      "validation": {
+        "cross_entropy": 0.526972234249115,
+        "top1_equivalent": 0.8740633982010487,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8491254941468819,
+        "drew_accuracy": 0.9141375517817462,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 3,
+      "train_cross_entropy": 0.48949285827325734,
+      "validation": {
+        "cross_entropy": 0.5281615853309631,
+        "top1_equivalent": 0.875520511246882,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8535842551950824,
+        "drew_accuracy": 0.9107711438620331,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 4,
+      "train_cross_entropy": 0.49390841627667276,
+      "validation": {
+        "cross_entropy": 0.5328783392906189,
+        "top1_equivalent": 0.8701191462241329,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8446123147343619,
+        "drew_accuracy": 0.9111075420515383,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 5,
+      "train_cross_entropy": 0.4916020889103775,
+      "validation": {
+        "cross_entropy": 0.5339168906211853,
+        "top1_equivalent": 0.877761749691917,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8546444678309553,
+        "drew_accuracy": 0.9149102406658269,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 6,
+      "train_cross_entropy": 0.48649875923205665,
+      "validation": {
+        "cross_entropy": 0.526885449886322,
+        "top1_equivalent": 0.875646004585181,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8512155527097935,
+        "drew_accuracy": 0.9149047040481992,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 7,
+      "train_cross_entropy": 0.4937185984392821,
+      "validation": {
+        "cross_entropy": 0.532389760017395,
+        "top1_equivalent": 0.8720877858014471,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8512819371712533,
+        "drew_accuracy": 0.9055219016586621,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 8,
+      "train_cross_entropy": 0.4877798693316119,
+      "validation": {
+        "cross_entropy": 0.525592565536499,
+        "top1_equivalent": 0.8775238015939931,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8550078100263289,
+        "drew_accuracy": 0.9137060445821925,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 9,
+      "train_cross_entropy": 0.48574181410691564,
+      "validation": {
+        "cross_entropy": 0.532743513584137,
+        "top1_equivalent": 0.8729058462071945,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8485946284872761,
+        "drew_accuracy": 0.9119729414420483,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 10,
+      "train_cross_entropy": 0.4848477080688856,
+      "validation": {
+        "cross_entropy": 0.5266583561897278,
+        "top1_equivalent": 0.8765083693732921,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.853891098633673,
+        "drew_accuracy": 0.912853363693064,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 11,
+      "train_cross_entropy": 0.48964471253203923,
+      "validation": {
+        "cross_entropy": 0.5311949253082275,
+        "top1_equivalent": 0.8757284955929894,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8516538987281095,
+        "drew_accuracy": 0.914415351154749,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 12,
+      "train_cross_entropy": 0.49030539465699025,
+      "validation": {
+        "cross_entropy": 0.52659010887146,
+        "top1_equivalent": 0.8770718144905477,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8550137113969126,
+        "drew_accuracy": 0.9125182501313763,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 13,
+      "train_cross_entropy": 0.488658565481218,
+      "validation": {
+        "cross_entropy": 0.5296340584754944,
+        "top1_equivalent": 0.8741502176735081,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.851228324048652,
+        "drew_accuracy": 0.9109847280432521,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 14,
+      "train_cross_entropy": 0.4898589011770105,
+      "validation": {
+        "cross_entropy": 0.528199315071106,
+        "top1_equivalent": 0.879037257039488,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8562106174219745,
+        "drew_accuracy": 0.9157186982615148,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 15,
+      "train_cross_entropy": 0.4827393351124758,
+      "validation": {
+        "cross_entropy": 0.5372264981269836,
+        "top1_equivalent": 0.8691099290415345,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8442510537040442,
+        "drew_accuracy": 0.9090570868280987,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 16,
+      "train_cross_entropy": 0.4798655357496393,
+      "validation": {
+        "cross_entropy": 0.5273847579956055,
+        "top1_equivalent": 0.8783835737108274,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8557500952906971,
+        "drew_accuracy": 0.9147546130854115,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 17,
+      "train_cross_entropy": 0.48061080169006287,
+      "validation": {
+        "cross_entropy": 0.5262832641601562,
+        "top1_equivalent": 0.8798466773035514,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8558906523489146,
+        "drew_accuracy": 0.9183429928371227,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 18,
+      "train_cross_entropy": 0.4820831250024726,
+      "validation": {
+        "cross_entropy": 0.5288577079772949,
+        "top1_equivalent": 0.8778310826430792,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8552526830095168,
+        "drew_accuracy": 0.9141136127449045,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 19,
+      "train_cross_entropy": 0.48766833254831743,
+      "validation": {
+        "cross_entropy": 0.527823805809021,
+        "top1_equivalent": 0.8772131676670473,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8547534568894077,
+        "drew_accuracy": 0.9133049698139394,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 20,
+      "train_cross_entropy": 0.4883530898386823,
+      "validation": {
+        "cross_entropy": 0.5292744040489197,
+        "top1_equivalent": 0.8783716539077031,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8570317772630995,
+        "drew_accuracy": 0.9126639301227162,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 21,
+      "train_cross_entropy": 0.4822576870839036,
+      "validation": {
+        "cross_entropy": 0.5244250297546387,
+        "top1_equivalent": 0.8809609053437867,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8585245001709169,
+        "drew_accuracy": 0.917015256372782,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 22,
+      "train_cross_entropy": 0.48634772719232755,
+      "validation": {
+        "cross_entropy": 0.5264421105384827,
+        "top1_equivalent": 0.8795548331950929,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8583304474056628,
+        "drew_accuracy": 0.9136615205066704,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 23,
+      "train_cross_entropy": 0.47890284061311555,
+      "validation": {
+        "cross_entropy": 0.5271846055984497,
+        "top1_equivalent": 0.8774750687036352,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8535191880286961,
+        "drew_accuracy": 0.9159711523858548,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 24,
+      "train_cross_entropy": 0.48249155605913585,
+      "validation": {
+        "cross_entropy": 0.5277262926101685,
+        "top1_equivalent": 0.8722434390262145,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8496747174551362,
+        "drew_accuracy": 0.908510416892314,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 25,
+      "train_cross_entropy": 0.4875576779880702,
+      "validation": {
+        "cross_entropy": 0.5292949676513672,
+        "top1_equivalent": 0.8771602262491852,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8559160115371368,
+        "drew_accuracy": 0.9112987777979747,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 26,
+      "train_cross_entropy": 0.4877310144319774,
+      "validation": {
+        "cross_entropy": 0.5233979225158691,
+        "top1_equivalent": 0.8785768349504537,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8587399089390502,
+        "drew_accuracy": 0.9104539332752861,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 27,
+      "train_cross_entropy": 0.489328107935061,
+      "validation": {
+        "cross_entropy": 0.5298625230789185,
+        "top1_equivalent": 0.8753372780296251,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8500321035019857,
+        "drew_accuracy": 0.916001619676153,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 28,
+      "train_cross_entropy": 0.48966118597237057,
+      "validation": {
+        "cross_entropy": 0.5261690616607666,
+        "top1_equivalent": 0.8787467881652035,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8571705756408591,
+        "drew_accuracy": 0.9134188461101,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 29,
+      "train_cross_entropy": 0.48189051085183626,
+      "validation": {
+        "cross_entropy": 0.52230304479599,
+        "top1_equivalent": 0.8760691609283123,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8506782551647541,
+        "drew_accuracy": 0.9168712690329761,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 30,
+      "train_cross_entropy": 0.4799937152953098,
+      "validation": {
+        "cross_entropy": 0.5254215598106384,
+        "top1_equivalent": 0.8774041597065987,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8535622943424523,
+        "drew_accuracy": 0.9157170256225885,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 31,
+      "train_cross_entropy": 0.4746289857508969,
+      "validation": {
+        "cross_entropy": 0.5282485485076904,
+        "top1_equivalent": 0.8749362040091129,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8529596813152803,
+        "drew_accuracy": 0.9102515434093049,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 32,
+      "train_cross_entropy": 0.4869737813733987,
+      "validation": {
+        "cross_entropy": 0.5296123623847961,
+        "top1_equivalent": 0.8795975919096509,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8590654922264986,
+        "drew_accuracy": 0.9125918048254452,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 33,
+      "train_cross_entropy": 0.48047112331309877,
+      "validation": {
+        "cross_entropy": 0.5265384316444397,
+        "top1_equivalent": 0.88180047663778,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.860433620303777,
+        "drew_accuracy": 0.9161361080687811,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 34,
+      "train_cross_entropy": 0.47698322182561786,
+      "validation": {
+        "cross_entropy": 0.5290930271148682,
+        "top1_equivalent": 0.8746493680072431,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8507030126097379,
+        "drew_accuracy": 0.9131301449728294,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 35,
+      "train_cross_entropy": 0.48173396106557714,
+      "validation": {
+        "cross_entropy": 0.5276322960853577,
+        "top1_equivalent": 0.8760089640323817,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8529871876709947,
+        "drew_accuracy": 0.9130039817212295,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 36,
+      "train_cross_entropy": 0.4799438505642082,
+      "validation": {
+        "cross_entropy": 0.5260892510414124,
+        "top1_equivalent": 0.8794437704146124,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8570656459040682,
+        "drew_accuracy": 0.9154044668923774,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 37,
+      "train_cross_entropy": 0.48043007579013924,
+      "validation": {
+        "cross_entropy": 0.5258805751800537,
+        "top1_equivalent": 0.8813813625864921,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8596371759339698,
+        "drew_accuracy": 0.9163233478274261,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 38,
+      "train_cross_entropy": 0.48334854970287705,
+      "validation": {
+        "cross_entropy": 0.5232177376747131,
+        "top1_equivalent": 0.8795844221120498,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8587702951933139,
+        "drew_accuracy": 0.9130318408276646,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 39,
+      "train_cross_entropy": 0.47646310209737613,
+      "validation": {
+        "cross_entropy": 0.5292534232139587,
+        "top1_equivalent": 0.8822053910821902,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8613051632647617,
+        "drew_accuracy": 0.915791170288332,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 40,
+      "train_cross_entropy": 0.48223414475561577,
+      "validation": {
+        "cross_entropy": 0.5260980129241943,
+        "top1_equivalent": 0.87874836267149,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8589360911621382,
+        "drew_accuracy": 0.9105858422577336,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 41,
+      "train_cross_entropy": 0.4753461730422435,
+      "validation": {
+        "cross_entropy": 0.5311128497123718,
+        "top1_equivalent": 0.873072958002776,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8485823449423778,
+        "drew_accuracy": 0.9124283339371798,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 42,
+      "train_cross_entropy": 0.47229773765810357,
+      "validation": {
+        "cross_entropy": 0.5280975699424744,
+        "top1_equivalent": 0.8791705874134084,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8544486835897137,
+        "drew_accuracy": 0.9188976377896582,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 43,
+      "train_cross_entropy": 0.4766112371538753,
+      "validation": {
+        "cross_entropy": 0.5282338261604309,
+        "top1_equivalent": 0.8778955292188528,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.855123506437388,
+        "drew_accuracy": 0.9144892035030029,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 44,
+      "train_cross_entropy": 0.47782130716943655,
+      "validation": {
+        "cross_entropy": 0.5308777093887329,
+        "top1_equivalent": 0.8845762759110093,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8661360474592071,
+        "drew_accuracy": 0.9142089405261093,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 45,
+      "train_cross_entropy": 0.48472132192931244,
+      "validation": {
+        "cross_entropy": 0.5298682451248169,
+        "top1_equivalent": 0.8741952524260139,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8520646836358332,
+        "drew_accuracy": 0.9097581373661261,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 46,
+      "train_cross_entropy": 0.4830129826711448,
+      "validation": {
+        "cross_entropy": 0.5282081365585327,
+        "top1_equivalent": 0.8773106832903138,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8557376051292753,
+        "drew_accuracy": 0.9119777044463836,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 47,
+      "train_cross_entropy": 0.48525412985322924,
+      "validation": {
+        "cross_entropy": 0.5268718600273132,
+        "top1_equivalent": 0.8784519962269082,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.857628269660327,
+        "drew_accuracy": 0.9119148411692517,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 48,
+      "train_cross_entropy": 0.47988439308245395,
+      "validation": {
+        "cross_entropy": 0.5279911756515503,
+        "top1_equivalent": 0.8804520844534913,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8588648526399402,
+        "drew_accuracy": 0.915141849928542,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 49,
+      "train_cross_entropy": 0.48301685536437505,
+      "validation": {
+        "cross_entropy": 0.5300586819648743,
+        "top1_equivalent": 0.8770860051868666,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8573381637860492,
+        "drew_accuracy": 0.9088199483227726,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 50,
+      "train_cross_entropy": 0.4650585337911899,
+      "validation": {
+        "cross_entropy": 0.5266512632369995,
+        "top1_equivalent": 0.8799577416349922,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8616532393311122,
+        "drew_accuracy": 0.9093723000898899,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 51,
+      "train_cross_entropy": 0.48367833364986645,
+      "validation": {
+        "cross_entropy": 0.5296078324317932,
+        "top1_equivalent": 0.8764631027998292,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8562648793444448,
+        "drew_accuracy": 0.9089207907855633,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 52,
+      "train_cross_entropy": 0.4756363453430234,
+      "validation": {
+        "cross_entropy": 0.5325340032577515,
+        "top1_equivalent": 0.8809250975191447,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8605344465773697,
+        "drew_accuracy": 0.9136920083098915,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 53,
+      "train_cross_entropy": 0.4760494252340761,
+      "validation": {
+        "cross_entropy": 0.5276867151260376,
+        "top1_equivalent": 0.8817323245787717,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8611415117074664,
+        "drew_accuracy": 0.9148208870964472,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 54,
+      "train_cross_entropy": 0.48587876711124683,
+      "validation": {
+        "cross_entropy": 0.5328127145767212,
+        "top1_equivalent": 0.8762148469238092,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8520368538522668,
+        "drew_accuracy": 0.9150678558020808,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 55,
+      "train_cross_entropy": 0.48217266546978066,
+      "validation": {
+        "cross_entropy": 0.5285589098930359,
+        "top1_equivalent": 0.8788461203696801,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.856804312463481,
+        "drew_accuracy": 0.9142663703357821,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 56,
+      "train_cross_entropy": 0.48307687161918017,
+      "validation": {
+        "cross_entropy": 0.5296984910964966,
+        "top1_equivalent": 0.8731751331901757,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8494937663730227,
+        "drew_accuracy": 0.9112300847518668,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 57,
+      "train_cross_entropy": 0.47487668393177285,
+      "validation": {
+        "cross_entropy": 0.5273537635803223,
+        "top1_equivalent": 0.8812207334030906,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8612975439074195,
+        "drew_accuracy": 0.9132364534865695,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 58,
+      "train_cross_entropy": 0.47351095310659846,
+      "validation": {
+        "cross_entropy": 0.5308049321174622,
+        "top1_equivalent": 0.880686059216892,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8623604095764837,
+        "drew_accuracy": 0.910134600544208,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 59,
+      "train_cross_entropy": 0.47494744699939356,
+      "validation": {
+        "cross_entropy": 0.5287894010543823,
+        "top1_equivalent": 0.8779106403767645,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8569098871464047,
+        "drew_accuracy": 0.9116579596557134,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 60,
+      "train_cross_entropy": 0.4759742955730773,
+      "validation": {
+        "cross_entropy": 0.5303338766098022,
+        "top1_equivalent": 0.882442489286509,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8622161744120472,
+        "drew_accuracy": 0.9149453189906473,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 61,
+      "train_cross_entropy": 0.47243178269294983,
+      "validation": {
+        "cross_entropy": 0.5277698040008545,
+        "top1_equivalent": 0.8802937848154607,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8589313274577878,
+        "drew_accuracy": 0.9146223472781688,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 62,
+      "train_cross_entropy": 0.4749177475828976,
+      "validation": {
+        "cross_entropy": 0.5286941528320312,
+        "top1_equivalent": 0.8766811706588543,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8570189188680905,
+        "drew_accuracy": 0.9082775749233802,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 63,
+      "train_cross_entropy": 0.49002680423721384,
+      "validation": {
+        "cross_entropy": 0.5292329788208008,
+        "top1_equivalent": 0.8793460418065258,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8578134655946242,
+        "drew_accuracy": 0.9139479780490237,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 64,
+      "train_cross_entropy": 0.46940843705125973,
+      "validation": {
+        "cross_entropy": 0.5295484066009521,
+        "top1_equivalent": 0.8793315952259072,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.857613716543963,
+        "drew_accuracy": 0.9142313046744951,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 65,
+      "train_cross_entropy": 0.4796086473092781,
+      "validation": {
+        "cross_entropy": 0.5275502800941467,
+        "top1_equivalent": 0.8807086913556853,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8627301386831997,
+        "drew_accuracy": 0.9095994625845314,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 66,
+      "train_cross_entropy": 0.47046659857619044,
+      "validation": {
+        "cross_entropy": 0.5236310362815857,
+        "top1_equivalent": 0.8785813387191215,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8568275890129565,
+        "drew_accuracy": 0.9135386913814534,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 67,
+      "train_cross_entropy": 0.4737847923990316,
+      "validation": {
+        "cross_entropy": 0.5231441855430603,
+        "top1_equivalent": 0.879182018735085,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8593910717801357,
+        "drew_accuracy": 0.9109852306673062,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 68,
+      "train_cross_entropy": 0.47325146601834067,
+      "validation": {
+        "cross_entropy": 0.5260956883430481,
+        "top1_equivalent": 0.8816754891485578,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8624537940759348,
+        "drew_accuracy": 0.9125639374619564,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 69,
+      "train_cross_entropy": 0.4712939569084741,
+      "validation": {
+        "cross_entropy": 0.525130569934845,
+        "top1_equivalent": 0.8802289404744964,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8585668226310746,
+        "drew_accuracy": 0.9150390446217773,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 70,
+      "train_cross_entropy": 0.4807191441964125,
+      "validation": {
+        "cross_entropy": 0.5274370908737183,
+        "top1_equivalent": 0.8768205285212394,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8582146195685982,
+        "drew_accuracy": 0.9067194346705727,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 71,
+      "train_cross_entropy": 0.4690288279937796,
+      "validation": {
+        "cross_entropy": 0.5280938148498535,
+        "top1_equivalent": 0.8767305986751655,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8555103753106922,
+        "drew_accuracy": 0.9108305971464689,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 72,
+      "train_cross_entropy": 0.4665213327350138,
+      "validation": {
+        "cross_entropy": 0.5312801003456116,
+        "top1_equivalent": 0.8790133859008354,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8583884812870078,
+        "drew_accuracy": 0.9121567324020685,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 73,
+      "train_cross_entropy": 0.47673258377164796,
+      "validation": {
+        "cross_entropy": 0.5301750302314758,
+        "top1_equivalent": 0.87209955662992,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8476575007623357,
+        "drew_accuracy": 0.9113769032159854,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 74,
+      "train_cross_entropy": 0.47863531414552246,
+      "validation": {
+        "cross_entropy": 0.5278677940368652,
+        "top1_equivalent": 0.8810072056558156,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8613348837820903,
+        "drew_accuracy": 0.9126197921163386,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 75,
+      "train_cross_entropy": 0.4804750198575127,
+      "validation": {
+        "cross_entropy": 0.5260118246078491,
+        "top1_equivalent": 0.8801075226791532,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.860836180169547,
+        "drew_accuracy": 0.9110757523170061,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 76,
+      "train_cross_entropy": 0.4745215861341638,
+      "validation": {
+        "cross_entropy": 0.5273389220237732,
+        "top1_equivalent": 0.8718611534935764,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8472864554836878,
+        "drew_accuracy": 0.9113516503736855,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 77,
+      "train_cross_entropy": 0.47018860130362766,
+      "validation": {
+        "cross_entropy": 0.5262218713760376,
+        "top1_equivalent": 0.8761523635241466,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8589398319544129,
+        "drew_accuracy": 0.9038121713468034,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 78,
+      "train_cross_entropy": 0.48031881791618103,
+      "validation": {
+        "cross_entropy": 0.5250555276870728,
+        "top1_equivalent": 0.876088094369145,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8557195772045287,
+        "drew_accuracy": 0.9088194371192394,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 79,
+      "train_cross_entropy": 0.47476393438189973,
+      "validation": {
+        "cross_entropy": 0.5278757214546204,
+        "top1_equivalent": 0.8751730857656055,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8523148410251473,
+        "drew_accuracy": 0.9119053150790483,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 80,
+      "train_cross_entropy": 0.48126578730418623,
+      "validation": {
+        "cross_entropy": 0.5341526865959167,
+        "top1_equivalent": 0.8699601784860963,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8465913680706789,
+        "drew_accuracy": 0.907512865173459,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 81,
+      "train_cross_entropy": 0.47062637545977815,
+      "validation": {
+        "cross_entropy": 0.5244349837303162,
+        "top1_equivalent": 0.8768678735650303,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8591001002128361,
+        "drew_accuracy": 0.905419931370541,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 82,
+      "train_cross_entropy": 0.47209303754101667,
+      "validation": {
+        "cross_entropy": 0.5293829441070557,
+        "top1_equivalent": 0.8751850366362721,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8564677866966789,
+        "drew_accuracy": 0.9052628630269076,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 83,
+      "train_cross_entropy": 0.4747699544480138,
+      "validation": {
+        "cross_entropy": 0.5272077322006226,
+        "top1_equivalent": 0.8760040616796843,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8551576657482992,
+        "drew_accuracy": 0.909503335329298,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 84,
+      "train_cross_entropy": 0.47326450936832243,
+      "validation": {
+        "cross_entropy": 0.5303022265434265,
+        "top1_equivalent": 0.8778798767459065,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8584557672805428,
+        "drew_accuracy": 0.9090935963990302,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 85,
+      "train_cross_entropy": 0.47293638850403374,
+      "validation": {
+        "cross_entropy": 0.5246925354003906,
+        "top1_equivalent": 0.8821692080331717,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8616544664958099,
+        "drew_accuracy": 0.9151355271452697,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 86,
+      "train_cross_entropy": 0.47342255622209434,
+      "validation": {
+        "cross_entropy": 0.5260054469108582,
+        "top1_equivalent": 0.880442686199234,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8623276824301158,
+        "drew_accuracy": 0.909552728550097,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 87,
+      "train_cross_entropy": 0.4676908445040301,
+      "validation": {
+        "cross_entropy": 0.5261173844337463,
+        "top1_equivalent": 0.8769171994482531,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8558867155926638,
+        "drew_accuracy": 0.9107122945803334,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 88,
+      "train_cross_entropy": 0.48085726719102095,
+      "validation": {
+        "cross_entropy": 0.5278773903846741,
+        "top1_equivalent": 0.8750024901006925,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8529760769302844,
+        "drew_accuracy": 0.9103980013796504,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 89,
+      "train_cross_entropy": 0.4721910105726993,
+      "validation": {
+        "cross_entropy": 0.5333168506622314,
+        "top1_equivalent": 0.8698501932762279,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8465800085852607,
+        "drew_accuracy": 0.9072443926095595,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 90,
+      "train_cross_entropy": 0.4677248761607994,
+      "validation": {
+        "cross_entropy": 0.524890661239624,
+        "top1_equivalent": 0.875717143027689,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.855481079834387,
+        "drew_accuracy": 0.9082356378665356,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 91,
+      "train_cross_entropy": 0.46865296367440507,
+      "validation": {
+        "cross_entropy": 0.5290210247039795,
+        "top1_equivalent": 0.8745093393281836,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8530537212035434,
+        "drew_accuracy": 0.9089876071901518,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 92,
+      "train_cross_entropy": 0.4772684274186192,
+      "validation": {
+        "cross_entropy": 0.5227270126342773,
+        "top1_equivalent": 0.8773358266443984,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.854816955857367,
+        "drew_accuracy": 0.9135226964159415,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 93,
+      "train_cross_entropy": 0.4681672583612579,
+      "validation": {
+        "cross_entropy": 0.5235134959220886,
+        "top1_equivalent": 0.8808084093555208,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8619203392753596,
+        "drew_accuracy": 0.9111607364633351,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 94,
+      "train_cross_entropy": 0.4698194511864432,
+      "validation": {
+        "cross_entropy": 0.5269992351531982,
+        "top1_equivalent": 0.8762461206130874,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8569530398295305,
+        "drew_accuracy": 0.90724928273472,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 95,
+      "train_cross_entropy": 0.4652500515371959,
+      "validation": {
+        "cross_entropy": 0.5309574007987976,
+        "top1_equivalent": 0.8800597009417823,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8583812373287574,
+        "drew_accuracy": 0.9148960720471865,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 96,
+      "train_cross_entropy": 0.4754517773651808,
+      "validation": {
+        "cross_entropy": 0.5282455682754517,
+        "top1_equivalent": 0.8797981674387407,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8597486585349081,
+        "drew_accuracy": 0.9120168774507996,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 97,
+      "train_cross_entropy": 0.4676984773866672,
+      "validation": {
+        "cross_entropy": 0.5398593544960022,
+        "top1_equivalent": 0.8688323154397479,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8460607001254895,
+        "drew_accuracy": 0.905425334941388,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 98,
+      "train_cross_entropy": 0.47201474087918843,
+      "validation": {
+        "cross_entropy": 0.5314859747886658,
+        "top1_equivalent": 0.8718362952347305,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8473624249177332,
+        "drew_accuracy": 0.9111647662909637,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 99,
+      "train_cross_entropy": 0.4731652271086669,
+      "validation": {
+        "cross_entropy": 0.5286824703216553,
+        "top1_equivalent": 0.8726235955238034,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8510002807158487,
+        "drew_accuracy": 0.9073713448396871,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    },
+    {
+      "epoch": 100,
+      "train_cross_entropy": 0.47115135190013224,
+      "validation": {
+        "cross_entropy": 0.5325345396995544,
+        "top1_equivalent": 0.8749292086005203,
+        "score_baseline_top1_equivalent": 0.7724569593900081,
+        "idle_accuracy": 0.8541975887439401,
+        "drew_accuracy": 0.9082440419684193,
+        "rounds": 300,
+        "groups": 10482,
+        "actions": 110361
+      }
+    }
+  ],
+  "training_seconds": 61.72965240001213,
+  "total_seconds": 83.02232270000968,
+  "cuda_numpy_max_error": 7.62939453125e-06,
+  "model_sha256": "662cbc94e074361586e98e6a79a54928638900b19a59c0edece1a7921ea06650",
+  "training_config": {
+    "seed": 2718,
+    "learning_rate": 0.001,
+    "batch_size": 256,
+    "width": 24,
+    "extra_weight": null,
+    "init_model_sha256": "00dd6828ea49ea1c041ae72b95e85c0a9875196263f21b8495c900caa131dbe3",
+    "torch_version": "2.9.1+cu128",
+    "device_name": "NVIDIA GeForce RTX 3060 Laptop GPU"
+  },
+  "provenance_note": "Data SHA256 and the recorded training command settings appended after completed runs; metrics and model weights unchanged."
+}

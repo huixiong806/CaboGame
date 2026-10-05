@@ -1,5 +1,6 @@
 //! Single-observer information-set planning against a mixture of opponent models.
 //! The bot accepts only PlayerView; tree keys contain no unobserved ranks.
+mod action_policy;
 mod match_value;
 mod policy;
 mod posterior;
@@ -41,6 +42,16 @@ fn repeated_public_cycle(view: &PlayerView) -> bool {
 
 #[derive(Clone, Debug)]
 pub struct PlannerCfg {
+    /// Distilled action logits rank and initialize search edges; rollouts can stay frozen.
+    pub policy_prior: bool,
+    /// Optional PUCT exploration coefficient with softened distilled probabilities; 0 off.
+    pub policy_puct: f64,
+    /// Search-distilled actor policy in rollouts: 0 off, 1 all, 2 opponents, 3 self.
+    pub rollout_policy: u8,
+    pub policy_model_path: String,
+    pub policy_actions: usize,
+    /// Offline diagnostic: act directly with the learned policy, bypassing search.
+    pub policy_only: bool,
     /// Break an observed, repeated public discard-exchange cycle by drawing.
     pub avoid_cycles: bool,
     /// Offline research only. Defaults never read a local model or change Normal's utility.
@@ -84,6 +95,12 @@ pub struct PlannerCfg {
 impl Default for PlannerCfg {
     fn default() -> Self {
         Self {
+            policy_prior: false,
+            policy_puct: 0.,
+            rollout_policy: 0,
+            policy_model_path: "data/action_policy/model-v1.bin".into(),
+            policy_actions: 12,
+            policy_only: false,
             avoid_cycles: false,
             learned_value: false,
             value_model_path: "data/match_value/model-v1.bin".into(),
@@ -142,6 +159,32 @@ impl PlannerCfg {
     }
     pub fn set(&mut self, key: &str, value: &str) -> bool {
         match key {
+            "policy_puct" => value
+                .parse::<f64>()
+                .ok()
+                .filter(|v| v.is_finite() && (0.0..=10.0).contains(v))
+                .map(|v| self.policy_puct = v),
+            "policy_prior" => match value {
+                "true" | "1" => Some(self.policy_prior = true),
+                "false" | "0" => Some(self.policy_prior = false),
+                _ => None,
+            },
+            "rollout_policy" => value
+                .parse::<u8>()
+                .ok()
+                .filter(|&v| v <= 3)
+                .map(|v| self.rollout_policy = v),
+            "policy_actions" => value
+                .parse::<usize>()
+                .ok()
+                .filter(|&v| (2..=64).contains(&v))
+                .map(|v| self.policy_actions = v),
+            "policy_model_path" => Some(self.policy_model_path = value.to_string()),
+            "policy_only" => match value {
+                "true" | "1" => Some(self.policy_only = true),
+                "false" | "0" => Some(self.policy_only = false),
+                _ => None,
+            },
             "avoid_cycles" => match value {
                 "true" | "1" => Some(self.avoid_cycles = true),
                 "false" | "0" => Some(self.avoid_cycles = false),
@@ -265,14 +308,36 @@ struct Edge {
 struct Node {
     visits: u32,
     edges: Vec<Edge>,
+    policy_exploration: Option<(Vec<f64>, f64, f64)>,
 }
 
 impl Node {
     fn new(s: &State, me: usize, cfg: &PlannerCfg) -> Self {
         let prior_base = s.utility(me);
+        let use_puct = cfg.policy_puct > 0. && s.target == 100 && s.penalty == 10;
+        let ranked = policy::search_ranked(s, cfg.max_actions, cfg.policy_prior || use_puct);
+        let policy_exploration = if use_puct {
+            let top = ranked
+                .iter()
+                .map(|(_, v)| *v / 8.)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let probs: Vec<_> = ranked.iter().map(|(_, v)| (*v / 8. - top).exp()).collect();
+            let sum = probs.iter().sum::<f64>();
+            Some((
+                probs
+                    .iter()
+                    .map(|p| 0.9 * p / sum + 0.1 / probs.len() as f64)
+                    .collect(),
+                cfg.policy_puct,
+                prior_base,
+            ))
+        } else {
+            None
+        };
         Self {
             visits: 0,
-            edges: policy::ranked(s, cfg.max_actions)
+            policy_exploration,
+            edges: ranked
                 .into_iter()
                 .map(|(action, score)| Edge {
                     action,
@@ -289,6 +354,26 @@ impl Node {
     }
 
     fn select(&self, exploration: f64) -> usize {
+        if let Some((probabilities, c, first_play)) = &self.policy_exploration {
+            return self
+                .edges
+                .iter()
+                .enumerate()
+                .max_by(|(i, a), (j, b)| {
+                    let value = |i: usize, e: &Edge| {
+                        let mean = if e.visits == 0 {
+                            *first_play - 0.02
+                        } else {
+                            e.sum / e.visits as f64
+                        };
+                        mean + c * probabilities[i] * ((self.visits + 1) as f64).sqrt()
+                            / (e.visits + 1) as f64
+                    };
+                    value(*i, a).total_cmp(&value(*j, b))
+                })
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+        }
         // Try each action; deterministic ties follow the observation-based tactical ranking.
         if let Some(i) = self.edges.iter().position(|e| e.visits == 0) {
             return i;
@@ -311,6 +396,7 @@ impl Node {
 pub struct PlannerBot {
     pub cfg: PlannerCfg,
     value_model: Option<std::sync::Arc<match_value::MatchValue>>,
+    policy_model: Option<std::sync::Arc<action_policy::ActionPolicy>>,
 }
 
 #[derive(Clone, Debug)]
@@ -349,7 +435,48 @@ impl PlannerBot {
         } else {
             None
         };
-        Ok(Self { cfg, value_model })
+        let policy_model = if cfg.rollout_policy > 0
+            || cfg.policy_only
+            || cfg.policy_prior
+            || cfg.policy_puct > 0.
+        {
+            Some(action_policy::ActionPolicy::load(std::path::Path::new(
+                &cfg.policy_model_path,
+            ))?)
+        } else {
+            None
+        };
+        Ok(Self {
+            cfg,
+            value_model,
+            policy_model,
+        })
+    }
+
+    /// One training group from the same legal observation used by the teacher.
+    /// Separate RNG prevents feature extraction changing the teacher's game stream.
+    pub fn policy_features(
+        &self,
+        view: &PlayerView,
+        rng: &mut dyn RngCore,
+    ) -> Option<Vec<(Command, Vec<f32>)>> {
+        let mut sampler = Sampler::configured(
+            view,
+            rng,
+            self.cfg.use_evidence,
+            self.cfg.blind_keep_evidence,
+            self.cfg.behavioral_evidence,
+            self.cfg.call_evidence,
+        )?;
+        sampler.template.special_tactics = self.cfg.special_tactics;
+        let s = &sampler.template;
+        let info = policy::Info::new(s, s.actor, s.stage == Stage::Idle && s.caller.is_none());
+        Some(
+            policy::ranked(s, self.cfg.max_actions)
+                .into_iter()
+                .map(|(a, _)| (a.command(), action_policy::features(s, &info, &a).to_vec()))
+                .collect(),
+        )
     }
 
     pub fn analyze(&self, view: &PlayerView, rng: &mut dyn RngCore) -> DecisionReport {
@@ -379,12 +506,13 @@ impl PlannerBot {
             report.elapsed_us = start.elapsed().as_micros() as u64;
             return report;
         }
-        if self.cfg.root_racing {
+        if self.cfg.root_racing && !self.cfg.policy_only {
             return racing::analyze(
                 view,
                 rng,
                 &self.cfg,
                 self.value_model.clone(),
+                self.policy_model.clone(),
                 start,
                 report,
             );
@@ -402,7 +530,21 @@ impl PlannerBot {
         report.belief_ok = true;
         sampler.template.special_tactics = self.cfg.special_tactics;
         sampler.template.value_model = self.value_model.clone();
+        sampler.template.policy_model = self.policy_model.clone();
+        sampler.template.rollout_policy = self.cfg.rollout_policy;
+        sampler.template.policy_player = me;
+        sampler.template.policy_actions = self.cfg.policy_actions;
         sampler.template.reset_policy_player = self.cfg.probabilistic_reset.then_some(me);
+        if self.cfg.policy_only {
+            report.command = self
+                .policy_model
+                .as_ref()
+                .unwrap()
+                .choose(&sampler.template, self.cfg.policy_actions)
+                .command();
+            report.elapsed_us = start.elapsed().as_micros() as u64;
+            return report;
+        }
         let special_call = special::call_relevant(&sampler.template);
         let root_key = sampler.template.observation_key(me);
         let fast = policy::choose(&sampler.template, 1);
@@ -463,7 +605,7 @@ impl PlannerBot {
                     own_depth += 1;
                     tree[ni].edges[ei].action.clone()
                 } else {
-                    policy::choose(&s, if s.actor == me { 1 } else { styles[s.actor] })
+                    policy::rollout(&s, if s.actor == me { 1 } else { styles[s.actor] })
                 };
                 s.apply(&action);
                 steps += 1;
@@ -555,6 +697,10 @@ impl PlannerBot {
             ) {
                 confirm.template.special_tactics = self.cfg.special_tactics;
                 confirm.template.value_model = self.value_model.clone();
+                confirm.template.policy_model = self.policy_model.clone();
+                confirm.template.rollout_policy = self.cfg.rollout_policy;
+                confirm.template.policy_player = me;
+                confirm.template.policy_actions = self.cfg.policy_actions;
                 confirm.template.reset_policy_player = self.cfg.probabilistic_reset.then_some(me);
                 let mut sum = 0.0;
                 let mut sq = 0.0;
@@ -581,7 +727,7 @@ impl PlannerBot {
                         state.apply(action);
                         let mut steps = 0;
                         while state.stage != Stage::End && steps < 512 {
-                            let next = policy::choose(
+                            let next = policy::rollout(
                                 &state,
                                 if state.actor == me {
                                     1

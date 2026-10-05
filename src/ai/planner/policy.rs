@@ -394,6 +394,15 @@ pub(super) fn ranked(s: &State, max_actions: usize) -> Vec<(Action, f64)> {
     }
 }
 
+pub(super) fn search_ranked(s: &State, max_actions: usize, learned: bool) -> Vec<(Action, f64)> {
+    if learned {
+        if let Some(model) = &s.policy_model {
+            return model.ranked(s, max_actions);
+        }
+    }
+    ranked(s, max_actions)
+}
+
 /// Four distinct styles: proactive, balanced, cautious, and a passive control.
 /// Each simulation samples a style per seat, held fixed throughout the round.
 pub(super) fn choose(s: &State, style: u8) -> Action {
@@ -423,4 +432,20 @@ pub(super) fn choose(s: &State, style: u8) -> Action {
         .filter(|a| !matches!(a, Action::Cabo))
         .max_by(|a, b| score(s, &info, a).total_cmp(&score(s, &info, b)))
         .unwrap_or(Action::Cabo)
+}
+
+/// Learned continuations are separate from the frozen incumbent and root ranking.
+pub(super) fn rollout(s: &State, style: u8) -> Action {
+    let active = match s.rollout_policy {
+        1 => true,
+        2 => s.actor != s.policy_player,
+        3 => s.actor == s.policy_player,
+        _ => false,
+    };
+    if active && s.target == 100 && s.penalty == 10 {
+        if let Some(model) = &s.policy_model {
+            return model.choose(s, s.policy_actions);
+        }
+    }
+    choose(s, style)
 }

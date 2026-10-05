@@ -46,7 +46,7 @@ fn rollout(
         if step % 16 == 0 && limit > 0 && start.elapsed().as_micros() >= limit as u128 {
             return None;
         }
-        let a = policy::choose(&s, if s.actor == me { 1 } else { styles[s.actor] });
+        let a = policy::rollout(&s, if s.actor == me { 1 } else { styles[s.actor] });
         s.apply(&a);
     }
     None
@@ -57,6 +57,7 @@ pub(super) fn analyze(
     rng: &mut dyn RngCore,
     cfg: &PlannerCfg,
     value_model: Option<std::sync::Arc<match_value::MatchValue>>,
+    policy_model: Option<std::sync::Arc<action_policy::ActionPolicy>>,
     start: Instant,
     mut report: DecisionReport,
 ) -> DecisionReport {
@@ -73,6 +74,10 @@ pub(super) fn analyze(
     };
     sampler.template.special_tactics = cfg.special_tactics;
     sampler.template.value_model = value_model.clone();
+    sampler.template.policy_model = policy_model.clone();
+    sampler.template.rollout_policy = cfg.rollout_policy;
+    sampler.template.policy_player = me;
+    sampler.template.policy_actions = cfg.policy_actions;
     sampler.template.reset_policy_player = cfg.probabilistic_reset.then_some(me);
     report.belief_ok = true;
     let special_call = special::call_relevant(&sampler.template);
@@ -88,7 +93,11 @@ pub(super) fn analyze(
     };
     // Full legal candidate generation happens before observation-only heuristic screening.
     // Retain the call, draw and incumbent even when they fall below the initial shortlist.
-    let ranked = policy::ranked(&sampler.template, cfg.max_actions);
+    let ranked = policy::search_ranked(
+        &sampler.template,
+        cfg.max_actions,
+        cfg.policy_prior || cfg.policy_puct > 0.,
+    );
     let mut actions: Vec<Action> = ranked
         .iter()
         .take(cfg.racing_actions)
@@ -188,6 +197,10 @@ pub(super) fn analyze(
         ) {
             fresh.template.special_tactics = cfg.special_tactics;
             fresh.template.value_model = value_model.clone();
+            fresh.template.policy_model = policy_model.clone();
+            fresh.template.rollout_policy = cfg.rollout_policy;
+            fresh.template.policy_player = me;
+            fresh.template.policy_actions = cfg.policy_actions;
             fresh.template.reset_policy_player = cfg.probabilistic_reset.then_some(me);
             let (mut sum, mut sq) = (0.0, 0.0);
             for _ in 0..cfg.confirmation_samples {
